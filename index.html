@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>KB PARK 予約システム</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700;900&family=Fredoka:wght@600&family=Zen+Maru+Gothic:wght@500;700&display=swap" rel="stylesheet">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        pop: {
+                            green:  '#32D74B',
+                            yellow: '#FFD60A',
+                            cyan:   '#30D5C8',
+                            pink:   '#FF69B4',
+                            text:   '#333333',
+                            bg:     '#F0FFF4',
+                            dim:    'rgba(0,0,0,0.6)'
+                        },
+                        msg: {
+                            blue:   '#3B82F6',
+                            yellow: '#EAB308',
+                            red:    '#EF4444'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['"Zen Maru Gothic"', 'sans-serif'],
+                        english: ['"Fredoka"', 'sans-serif'],
+                        rounded: ['"M PLUS Rounded 1c"', 'sans-serif']
+                    },
+                    animation: {
+                        'pop-in': 'popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards'
+                    },
+                    keyframes: {
+                        popIn: {
+                            '0%': { transform: 'scale(0.9)', opacity: '0' },
+                            '100%': { transform: 'scale(1)', opacity: '1' }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="style.css">
+<style>
+
+/* 済ハンコ（過去日表示用） */
+.kb-stamp-done{
+  position:absolute;
+  inset: 14%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color:#d40000;
+  border:4px solid #d40000;
+  border-radius:14px;
+  transform: rotate(-12deg);
+  font-weight: 900;
+  font-size: 22px;
+  letter-spacing: 2px;
+  background: rgba(255,255,255,0.35);
+  pointer-events:none;
+}
+.kb-stamp-done small{
+  display:block;
+  font-size: 12px;
+  font-weight: 800;
+  margin-top: 2px;
+}
+
+</style>
+</head>
+<body class="bg-pop-bg text-pop-text font-sans antialiased overflow-x-hidden selection:bg-pop-pink selection:text-white">
+
+    <div id="loader" class="hidden fixed inset-0 z-[9999] bg-pop-green flex flex-col items-center justify-center text-white">
+        <!-- 通信中でっせ（通常） -->
+        <img data-loader-spinner="1" src="通信中でっせ.png" alt="通信中" class="w-1/2 max-w-[200px] mb-4 animate-bounce">
+        <!-- パンダ通信中（ランダム表示） -->
+        <img id="loaderImgPanda" src="パンダ通信中.png" alt="パンダ通信中" class="hidden w-1/2 max-w-[200px] mb-4 object-contain animate-bounce">
+        <p class="text-2xl font-bold font-rounded tracking-widest animate-pulse">LOADING...</p>
+    </div>
+
+    <div class="fixed inset-0 pointer-events-none z-0 opacity-10" style="background-image: radial-gradient(#32D74B 2px, transparent 2px); background-size: 30px 30px;"></div>
+
+    <header class="fixed top-0 w-full z-40 bg-white/90 backdrop-blur-md shadow-sm border-b-4 border-pop-green/20">
+        <div class="container mx-auto px-4 h-16 flex justify-between items-center">
+            <h1 class="text-xl md:text-2xl font-black font-rounded text-pop-green flex items-center gap-2">
+                <img src="kb君万歳.png" alt="KB君" class="w-10 h-10 object-contain" /> KB PARK 予約システム
+            </h1>
+            <div id="headerUserArea" class="hidden flex items-center gap-3">
+                <span id="headerUserName" class="font-bold text-sm text-pop-green hidden md:inline">ゲスト様</span>
+                <button id="headerLogoutBtn" class="text-xs bg-gray-200 hover:bg-gray-300 px-3 py-2 rounded-full transition font-bold text-gray-600">ログアウト</button>
+            </div>
+        </div>
+    </header>
+
+    <main class="relative z-10 pt-24 pb-20 container mx-auto px-4 max-w-3xl">
+
+        <section id="authSection" class="bg-white rounded-3xl shadow-xl border-4 border-pop-green/30 p-8 text-center mb-12 transform transition-all hover:scale-[1.01]">
+            <div class="mb-6"><span class="text-6xl">🔐</span></div>
+            <h3 class="text-2xl font-bold mb-2">予約へ進む</h3>
+            <p class="text-gray-500 mb-8 text-sm">会員IDでログインしてください。<br>初めての方は登録（無料）をお願いします。</p>
+            <div class="grid gap-4 md:grid-cols-2 max-w-lg mx-auto">
+                <button onclick="openModal('loginModal')" class="bg-pop-cyan text-white font-bold py-4 rounded-2xl shadow-[0_6px_0_rgb(30,170,160)] active:shadow-none active:translate-y-[6px] transition hover:brightness-110 flex items-center justify-center gap-2">
+                    <span>🔑</span> ログイン
+                </button>
+                <button onclick="openModal('registerModal')" class="bg-pop-pink text-white font-bold py-4 rounded-2xl shadow-[0_6px_0_rgb(200,60,120)] active:shadow-none active:translate-y-[6px] transition hover:brightness-110 flex items-center justify-center gap-2">
+                    <span>📝</span> 新規会員登録
+                </button>
+            </div>
+        </section>
+
+        <section id="bookingSection" class="hidden">
+            <div class="bg-gradient-to-r from-pop-green to-emerald-400 rounded-2xl p-6 text-white shadow-lg mb-8 flex justify-between items-center">
+                <div>
+                    <p class="text-xs opacity-80 font-bold">ようこそ！</p>
+                    <p class="text-2xl font-black" id="dispMemberName">ゲスト 様</p>
+                    <p class="text-sm font-mono mt-1 opacity-90">ID: <span id="dispMemberId" class="font-bold text-xl">---</span></p>
+                </div>
+                <button onclick="openModal('qrModal')" class="bg-white text-pop-green font-bold py-2 px-4 rounded-xl shadow-md active:scale-95 transition text-sm flex flex-col items-center">
+                    <span class="text-2xl leading-none">📱</span>
+                    <span class="text-[10px]">会員証</span>
+                </button>
+            </div>
+
+            <div class="bg-white rounded-3xl shadow-xl border-4 border-gray-100 p-6 mb-8">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-xl font-bold flex items-center gap-2"><span>📅</span> 日時を選ぶ</h3>
+                    <div class="flex gap-2">
+                        <button id="prevMonthBtn" class="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center font-bold text-gray-500 transition">◀</button>
+                        <span id="currentMonthLabel" class="text-xl font-black font-english py-1">...</span>
+                        <button id="nextMonthBtn" class="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center font-bold text-gray-500 transition">▶</button>
+                    </div>
+                </div>
+                <div id="calendarGrid" class="grid grid-cols-7 gap-1 md:gap-2 mb-4 text-center">
+                    <div class="text-pop-pink font-bold text-sm">日</div>
+                    <div class="text-gray-400 font-bold text-sm">月</div>
+                    <div class="text-gray-400 font-bold text-sm">火</div>
+                    <div class="text-gray-400 font-bold text-sm">水</div>
+                    <div class="text-gray-400 font-bold text-sm">木</div>
+                    <div class="text-gray-400 font-bold text-sm">金</div>
+                    <div class="text-blue-400 font-bold text-sm">土</div>
+                </div>
+                <div id="calendarDays" class="grid grid-cols-7 gap-1 md:gap-2"></div>
+                <div class="flex justify-center gap-4 mt-6 text-xs font-bold text-gray-500">
+                    <div class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-pop-green"></span>空きあり</div>
+                    <div class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-pop-yellow"></span>残りわずか</div>
+                    <div class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-gray-300"></span>満員/休</div>
+                </div>
+            </div>
+
+            <div id="timeSelectArea" class="hidden bg-white rounded-3xl shadow-xl border-4 border-pop-yellow p-6 animate-pulse-fast">
+                <h3 class="text-lg font-bold mb-4 text-center">⏰ 時間を選んでください</h3>
+                <div id="timeSlotsContainer" class="grid grid-cols-2 md:grid-cols-4 gap-3"></div>
+            </div>
+        </section>
+
+        <!-- マイ予約（ログイン時のみ表示） -->
+        <section id="myReservationsSection" class="hidden bg-white rounded-3xl shadow-xl border-4 border-pop-green/20 p-6 mb-12">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-xl font-bold flex items-center gap-2"><span>📌</span> マイ予約</h3>
+            </div>
+            <div id="myReservationsEmpty" class="text-sm text-gray-500 hidden">予約はありません。</div>
+            <div id="myReservations" class="grid gap-3"></div>
+        </section>
+
+
+    </main>
+
+    <footer class="bg-gray-800 text-white py-8 text-center text-sm">
+        <p class="opacity-60">&copy; KB PARK All Rights Reserved.</p>
+    </footer>
+
+    <div id="loginModal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-pop-dim backdrop-blur-sm" onclick="closeModal('loginModal')"></div>
+        <div class="relative w-full max-w-lg bg-white rounded-3xl p-6 shadow-2xl animate-pop-in">
+            <button onclick="closeModal('loginModal')" class="absolute top-4 right-4 text-2xl text-gray-400 hover:text-gray-600">×</button>
+            <h3 class="text-2xl font-bold text-center mb-6 text-pop-cyan">ログイン</h3>
+            <form id="loginForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-bold text-gray-500 mb-1">会員ID (10桁)</label>
+                    <input type="tel" name="member_id" required pattern="\d{10}" maxlength="10" class="w-full bg-gray-50 border-2 border-gray-200 rounded-xl p-3 focus:border-pop-cyan font-mono text-xl text-center tracking-widest" placeholder="2602011234">
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-gray-500 mb-1">電話番号 (下4桁)</label>
+                    <input type="tel" name="phone_last4" required pattern="\d{4}" maxlength="4" class="w-full bg-gray-50 border-2 border-gray-200 rounded-xl p-3 focus:border-pop-cyan font-mono text-xl text-center tracking-widest" placeholder="1234">
+                </div>
+                <button type="submit" class="w-full bg-pop-cyan text-white font-bold py-3 rounded-xl shadow-lg mt-2 hover:brightness-110 transition">ログインして予約へ</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="registerModal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-pop-dim backdrop-blur-sm" onclick="closeModal('registerModal')"></div>
+        <div class="relative w-full max-w-lg bg-white rounded-3xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto animate-pop-in">
+            <button onclick="closeModal('registerModal')" class="absolute top-4 right-4 text-2xl text-gray-400 hover:text-gray-600">×</button>
+            <h3 class="text-2xl font-bold text-center mb-2 text-pop-pink">新規会員登録</h3>
+            
+            <div class="bg-red-50 border-2 border-red-200 p-4 rounded-xl mb-6 text-red-600 text-sm font-bold">
+                <p class="flex items-center gap-2 text-lg mb-2">⚠️ <span class="underline">必ずお読みください</span></p>
+                <p>本名と連絡先は正しくご記載ください。</p>
+                <p class="mt-2 text-xs text-red-500 font-normal">
+                    ※虚偽の名前と連絡先を記載した場合は、万が一の際の対応が出来なくなる可能性がありますので正しい記載をお願いします。
+                </p>
+            </div>
+
+            <form id="registerForm" class="space-y-3 mt-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-500">お名前 (代表者)</label>
+                    <input type="text" name="name" required class="w-full bg-gray-50 border-2 border-gray-200 rounded-lg p-2 focus:border-pop-pink" placeholder="例：福山 太郎">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500">電話番号 (ご本人)</label>
+                        <input type="tel" name="phone" required class="w-full bg-gray-50 border-2 border-gray-200 rounded-lg p-2 focus:border-pop-pink" placeholder="09012345678">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 text-red-400">緊急連絡先 (必須)</label>
+                        <input type="tel" name="emergency_phone" required class="w-full bg-gray-50 border-2 border-gray-200 rounded-lg p-2 focus:border-pop-pink" placeholder="家族など">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500">生年月日</label>
+                        <input type="date" name="birth_date" required class="w-full bg-gray-50 border-2 border-gray-200 rounded-lg p-2 focus:border-pop-pink">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500">メールアドレス</label>
+                        <input type="email" name="email" required class="w-full bg-gray-50 border-2 border-gray-200 rounded-lg p-2 focus:border-pop-pink" placeholder="example@...">
+                    </div>
+                </div>
+                <div class="bg-blue-50 p-3 rounded-xl border border-blue-100">
+                    <label class="block text-xs font-bold text-gray-500 mb-1">住所入力</label>
+                    <div class="flex gap-2 mb-2">
+                        <input type="tel" name="zip_code" id="regZip" maxlength="7" class="w-24 bg-white border-2 border-gray-200 rounded-lg p-2 text-center font-mono" placeholder="7200000">
+                        <button type="button" id="btnZipSearch" class="bg-gray-600 text-white text-xs font-bold px-3 rounded-lg hover:bg-gray-700">検索</button>
+                    </div>
+                    <input type="text" name="address" id="regAddress" required class="w-full bg-white border-2 border-gray-200 rounded-lg p-2 mb-1 focus:border-pop-pink" placeholder="住所検索結果" readonly>
+                    <input type="text" name="address_street" required class="w-full bg-white border-2 border-pop-pink rounded-lg p-2" placeholder="番地・建物名">
+                </div>
+
+                <div id="termsBox" class="bg-gray-50 p-4 rounded-xl text-xs text-gray-600 h-48 overflow-y-scroll border-2 border-gray-200">
+                    <h3 class="font-bold text-sm mb-2 text-center">トランポリンパーク利用規約</h3>
+                    <p class="mb-2">本規約は、当トランポリンパーク（以下「当施設」）の利用に関し、当施設を利用されるすべてのお客様（以下「お客様」）に適用されます。お客様は当施設を利用することにより、本規約に同意したものとみなします。</p>
+
+                    <h4 class="font-bold mt-3 mb-1">第1条（適用範囲）</h4>
+                    <p>本規約は、当施設の施設・設備・付帯サービスの利用に関する一切に適用されます。個別の掲示・案内・スタッフの指示は本規約の一部を構成し、相互に補完されます。</p>
+
+                    <h4 class="font-bold mt-3 mb-1">第2条（利用条件）</h4>
+                    <ol class="list-decimal pl-4 space-y-1">
+                        <li>中学生以下のお客様は、必ず保護者の同伴のもとでご利用ください。</li>
+                        <li>高校生（未成年）のお客様は、保護者の同意がある場合に限り、単独でご利用いただけます。</li>
+                        <li>次に該当する方は利用できません。
+                            <ul class="list-disc pl-4 mt-1">
+                                <li>飲酒している方</li>
+                                <li>妊娠中の方</li>
+                                <li>医師から運動制限を受けている方</li>
+                                <li>体調不良（発熱・めまい・過労・睡眠不足等）の方</li>
+                            </ul>
+                        </li>
+                        <li>当施設スタッフの指示に従わない場合、利用の中止または退場をお願いすることがあります。</li>
+                    </ol>
+
+                    <h4 class="font-bold mt-3 mb-1">第3条（危険の認識と自己責任）</h4>
+                    <ol class="list-decimal pl-4 space-y-1">
+                        <li>トランポリンの利用には、転倒・衝突・骨折・捻挫等の重大な事故の危険が伴うことを十分理解し、自己の責任において利用するものとします。</li>
+                        <li>当施設は安全管理に努めますが、利用中に発生した傷害・事故について、当施設に故意または重大な過失がある場合を除き、一切の責任を負いません。</li>
+                    </ol>
+
+                    <h4 class="font-bold mt-3 mb-1">第4条（宙返りの禁止）</h4>
+                    <ol class="list-decimal pl-4 space-y-1">
+                        <li>宙返り（前方・後方・側方を含む一切の回転技）は、原則として禁止します。</li>
+                        <li>当施設スタッフがその都度許可した場合に限り、周囲の安全を十分確認のうえで実施できます。許可は各回ごとに必要です。</li>
+                        <li>許可がある場合でも、当施設が当該行為の結果について責任を負うものではありません。スタッフの目が届かない状況での宙返りは禁止します。</li>
+                    </ol>
+
+                    <h4 class="font-bold mt-3 mb-1">第5条（免責事項）</h4>
+                    <p>次の場合、当施設は責任を負いません。万一事故が発生した場合でも、当施設の責任は当施設が加入する保険の補償範囲内に限定されます。</p>
+                    <ul class="list-disc pl-4 mt-1">
+                        <li>お客様自身の不注意・過失による事故</li>
+                        <li>他のお客様との接触・衝突に起因する事故</li>
+                        <li>ルール違反・スタッフ指示違反に起因する事故</li>
+                        <li>所持品の紛失・盗難・破損</li>
+                    </ul>
+
+                    <h4 class="font-bold mt-3 mb-1">第6条（禁止行為）</h4>
+                    <ul class="list-disc pl-4 mt-1">
+                        <li>危険行為（複数人で同一面を同時利用、他人を押す、乱暴なジャンプ等）</li>
+                        <li>飲酒・喫煙後の利用</li>
+                    </ul>
+                </div>
+
+                <label class="flex items-center gap-3 p-3 bg-white border border-gray-200 rounded-lg shadow-sm cursor-pointer hover:bg-gray-50">
+                    <input type="checkbox" required class="w-6 h-6 text-pop-pink focus:ring-pop-pink border-gray-300 rounded">
+                    <span class="text-sm font-bold">上記規約を読み、内容に同意します</span>
+                </label>
+                <button type="submit" class="w-full bg-pop-pink text-white font-bold py-3 rounded-xl shadow-lg hover:brightness-110 transition">登録する</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="messageModal" class="fixed inset-0 z-[100] hidden flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity" onclick="closeMessageModal()"></div>
+        <div class="relative w-full max-w-sm bg-white rounded-3xl p-6 shadow-2xl text-center animate-pop-in">
+            <div id="msgIcon" class="text-5xl mb-4">ℹ️</div>
+            <h3 id="msgTitle" class="text-xl font-bold mb-2">タイトル</h3>
+            <p id="msgBody" class="text-gray-600 mb-6 text-sm leading-relaxed whitespace-pre-wrap">メッセージ本文</p>
+            <button onclick="closeMessageModal()" id="msgBtn" class="w-full py-3 rounded-xl font-bold text-white shadow-md transition transform active:scale-95">OK</button>
+        </div>
+    </div>
+
+    <div id="confirmModal" class="fixed inset-0 z-[100] hidden flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity"></div>
+        <div class="relative w-full max-w-sm bg-white rounded-3xl p-6 shadow-2xl text-center animate-pop-in">
+            <div class="text-5xl mb-4">🤔</div>
+            <h3 id="cfmTitle" class="text-xl font-bold mb-2">確認</h3>
+            <p id="cfmBody" class="text-gray-600 mb-6 text-sm leading-relaxed whitespace-pre-wrap">よろしいですか？</p>
+            <div class="flex gap-3">
+                <button onclick="closeConfirmModal(false)" class="flex-1 py-3 rounded-xl font-bold bg-gray-200 text-gray-600 hover:bg-gray-300 transition">いいえ</button>
+                <button id="cfmYesBtn" class="flex-1 py-3 rounded-xl font-bold bg-pop-pink text-white shadow-md hover:brightness-110 transition">はい</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="reserveModal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-pop-dim backdrop-blur-sm" onclick="closeModal('reserveModal')"></div>
+        <div class="relative w-full max-w-lg bg-white rounded-3xl p-6 shadow-2xl animate-pop-in">
+            <h3 class="text-xl font-bold text-center mb-4">予約内容の確認</h3>
+            <div class="bg-pop-bg p-4 rounded-xl mb-4 text-center">
+                <p class="text-2xl font-black text-pop-green" id="resDate">--/--</p>
+                <p class="text-3xl font-black text-pop-green" id="resTime">--:--</p>
+            </div>
+            <form id="reserveForm" class="space-y-4">
+                <input type="hidden" name="slot_id" id="resSlotId">
+                <div>
+                    <label class="block text-sm font-bold text-gray-500 mb-1">来店人数</label>
+                    <select name="head_count" class="w-full bg-gray-50 border-2 border-gray-200 rounded-xl p-3 font-bold text-lg text-center focus:border-pop-green">
+                        <option value="1">1名</option>
+                        <option value="2">2名</option>
+                        <option value="3">3名</option>
+                        <option value="4">4名</option>
+                        <option value="5">5名</option>
+                        <option value="6">6名</option>
+                    </select>
+                </div>
+                <div class="text-sm text-gray-500">
+                    <p>※代表者 <span id="resOwnerName" class="font-bold"></span> 様のアカウントで予約します。</p>
+                </div>
+                <div id="resAmount" class="text-sm mt-1 hidden"></div>
+                <button type="submit" class="w-full bg-pop-green text-white font-bold py-4 rounded-xl shadow-lg text-lg hover:translate-y-1 hover:shadow-none transition">
+                    予約へ進む
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div id="qrModal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-pop-dim backdrop-blur-sm" onclick="closeModal('qrModal')"></div>
+        <div class="relative w-full max-w-sm bg-white rounded-3xl p-8 shadow-2xl text-center animate-pop-in">
+            <button onclick="closeModal('qrModal')" class="absolute top-4 right-4 text-2xl text-gray-400">×</button>
+            <h3 class="text-xl font-bold mb-4 text-pop-green">DIGITAL MEMBER CARD</h3>
+            <div id="qrCodeArea" class="bg-white border-4 border-gray-100 rounded-xl p-4 mb-4 aspect-square flex items-center justify-center">
+                <img src="" id="qrImage" alt="QR Code" class="w-full h-full object-contain">
+            </div>
+            <p class="text-3xl font-mono font-bold mb-2 tracking-widest text-pop-text" id="qrMemberId">---</p>
+            <p class="text-gray-400 text-xs">来店時にこの画面をスタッフに見せてください</p>
+        </div>
+    </div>
+
+    <script src="main.js"></script>
+    <script>
+        function openModal(id){ document.getElementById(id).classList.remove('hidden'); }
+        function closeModal(id){ document.getElementById(id).classList.add('hidden'); }
+        function closeMessageModal(){ document.getElementById('messageModal').classList.add('hidden'); }
+        function closeConfirmModal(){ document.getElementById('confirmModal').classList.add('hidden'); }
+    </script>
+<!-- 規約同意（予約確定前・毎回） -->
+<div id="termsReserveModal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
+    <div class="absolute inset-0 bg-pop-dim backdrop-blur-sm" onclick="closeModal('termsReserveModal')"></div>
+    <div class="relative w-full max-w-lg bg-white rounded-3xl p-5 shadow-2xl animate-pop-in">
+        <h3 class="text-xl font-bold text-center mb-3">利用規約の確認</h3>
+
+        <div id="termsReserveScroll" class="bg-gray-50 p-4 rounded-xl text-xs text-gray-700 h-80 overflow-y-scroll border-2 border-gray-200">
+            <div id="termsReserveBody"></div>
+        </div>
+
+        <div class="mt-3 flex items-start gap-2">
+            <input id="termsReserveCheck" disabled type="checkbox" class="mt-1 w-5 h-5">
+            <label id="termsReserveLabel" for="termsReserveCheck" class="text-sm text-gray-400">
+                上記の利用規約を最後まで確認し、同意します
+            </label>
+        </div>
+
+        <button id="termsReserveAgreeBtn" class="mt-4 w-full bg-pop-green text-white font-bold py-4 rounded-xl shadow-lg text-lg hover:translate-y-1 hover:shadow-none transition" disabled>
+            同意して予約確定へ
+        </button>
+
+        <button class="mt-2 w-full bg-gray-200 text-gray-700 font-bold py-3 rounded-xl hover:bg-gray-300 transition" onclick="closeModal('termsReserveModal')">
+            戻る
+        </button>
+    </div>
+</div>
+</body>
+</html>
+

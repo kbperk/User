@@ -1,0 +1,152 @@
+@charset "UTF-8";
+
+/* =========================================
+   基本設定 & フォント
+   ========================================= */
+body {
+    font-family: "Zen Maru Gothic", sans-serif;
+    /* ポップな背景パターン (水玉) */
+    background-color: #F0FFF4;
+    background-image: 
+        radial-gradient(#32D74B 1.5px, transparent 1.5px),
+        radial-gradient(#32D74B 1.5px, transparent 1.5px);
+    background-size: 30px 30px;
+    background-position: 0 0, 15px 15px;
+    
+    /* 文字の読みやすさを確保するために背景を少し白くブレンド */
+    background-blend-mode: overlay;
+}
+
+/* 英語/数字用フォント */
+.font-english, .font-mono {
+    font-family: "Fredoka", "M PLUS Rounded 1c", sans-serif;
+    letter-spacing: 0.05em;
+}
+
+/* =========================================
+   ローディング画面 (通信中でっせ.png)
+   ========================================= */
+#loader {
+    /* グラデーション背景で少しリッチに */
+    background: linear-gradient(135deg, #32D74B 0%, #30D5C8 100%);
+}
+
+/* 画像の影 */
+#loader img {
+    filter: drop-shadow(0 4px 0 rgba(0,0,0,0.1));
+}
+
+/* =========================================
+   UI コンポーネント装飾
+   ========================================= */
+
+/* ボタン等のタップ時のハイライトを無効化 (スマホ用) */
+button, input, select {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+}
+
+/* カレンダーの日付ボタン */
+#calendarDays button {
+    position: relative;
+    overflow: hidden;
+}
+
+/* 選択中の日付にキラキラ効果 */
+#calendarDays button.bg-pop-pink::after {
+    content: "✨";
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    font-size: 10px;
+    animation: spin-slow 3s infinite linear;
+}
+
+/* 時間枠ボタンのホバー/アクティブ挙動 */
+#timeSlotsContainer button:active {
+    transform: scale(0.96);
+}
+
+/* =========================================
+   モーダル & フォーム
+   ========================================= */
+
+/* モーダル背景のぼかし強化 */
+.backdrop-blur-sm {
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+/* 入力フォームのフォーカスリング */
+input:focus, select:focus {
+    outline: none;
+    box-shadow: 0 0 0 4px rgba(48, 213, 200, 0.3); /* pop-cyanの薄い色 */
+    transform: translateY(-2px);
+    transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* チェックボックスのカスタムカラー */
+input[type="checkbox"] {
+    accent-color: #FF69B4; /* pop-pink */
+    width: 1.25rem;
+    height: 1.25rem;
+}
+
+/* readonlyのinput (住所自動入力欄など) */
+input[readonly] {
+    background-color: #f3f4f6;
+    color: #6b7280;
+    border-color: #e5e7eb;
+    pointer-events: none;
+}
+
+/* =========================================
+   アニメーション定義
+   ========================================= */
+
+/* キラキラ回転 */
+@keyframes spin-slow {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* メッセージモーダルのアイコンアニメーション */
+#msgIcon {
+    display: inline-block;
+    animation: bounce-icon 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes bounce-icon {
+    0% { transform: scale(0); opacity: 0; }
+    60% { transform: scale(1.2); opacity: 1; }
+    100% { transform: scale(1); }
+}
+
+/* モーダル出現アニメーション (JS制御クラス用) */
+.animate-pop-in {
+    animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@keyframes popIn {
+    0% { transform: scale(0.9); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+/* =========================================
+   スクロールバー (可愛くカスタマイズ)
+   ========================================= */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background: #ccc;
+    border-radius: 99px;
+    border: 2px solid #fff; /* 白枠で浮いているように見せる */
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #FF69B4; /* ホバーでピンクに */
+}
