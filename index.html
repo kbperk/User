@@ -50,7 +50,6 @@
     </script>
     <link rel="stylesheet" href="style.css">
 <style>
-
 /* 済ハンコ（過去日表示用） */
 .kb-stamp-done{
   position:absolute;
@@ -74,15 +73,14 @@
   font-weight: 800;
   margin-top: 2px;
 }
-
 </style>
 </head>
 <body class="bg-pop-bg text-pop-text font-sans antialiased overflow-x-hidden selection:bg-pop-pink selection:text-white">
 
+    <div class="bg-scroll-container"></div>
+
     <div id="loader" class="hidden fixed inset-0 z-[9999] bg-pop-green flex flex-col items-center justify-center text-white">
-        <!-- 通信中でっせ（通常） -->
         <img data-loader-spinner="1" src="通信中でっせ.png" alt="通信中" class="w-1/2 max-w-[200px] mb-4 animate-bounce">
-        <!-- パンダ通信中（ランダム表示） -->
         <img id="loaderImgPanda" src="パンダ通信中.png" alt="パンダ通信中" class="hidden w-1/2 max-w-[200px] mb-4 object-contain animate-bounce">
         <p class="text-2xl font-bold font-rounded tracking-widest animate-pulse">LOADING...</p>
     </div>
@@ -94,9 +92,13 @@
             <h1 class="text-xl md:text-2xl font-black font-rounded text-pop-green flex items-center gap-2">
                 <img src="kb君万歳.png" alt="KB君" class="w-10 h-10 object-contain" /> KB PARK 予約システム
             </h1>
-            <div id="headerUserArea" class="hidden flex items-center gap-3">
-                <span id="headerUserName" class="font-bold text-sm text-pop-green hidden md:inline">ゲスト様</span>
-                <button id="headerLogoutBtn" class="text-xs bg-gray-200 hover:bg-gray-300 px-3 py-2 rounded-full transition font-bold text-gray-600">ログアウト</button>
+            <div class="flex items-center gap-2">
+                <a href="https://kbperk.github.io/main/" class="text-[10px] md:text-xs bg-pop-yellow text-black px-3 py-2 rounded-full font-bold shadow-sm hover:brightness-110 transition whitespace-nowrap">TOPへ戻る</a>
+                
+                <div id="headerUserArea" class="hidden flex items-center gap-3">
+                    <span id="headerUserName" class="font-bold text-sm text-pop-green hidden md:inline">ゲスト様</span>
+                    <button id="headerLogoutBtn" class="text-xs bg-gray-200 hover:bg-gray-300 px-3 py-2 rounded-full transition font-bold text-gray-600">ログアウト</button>
+                </div>
             </div>
         </div>
     </header>
@@ -162,7 +164,6 @@
             </div>
         </section>
 
-        <!-- マイ予約（ログイン時のみ表示） -->
         <section id="myReservationsSection" class="hidden bg-white rounded-3xl shadow-xl border-4 border-pop-green/20 p-6 mb-12">
             <div class="flex items-center justify-between mb-4">
                 <h3 class="text-xl font-bold flex items-center gap-2"><span>📌</span> マイ予約</h3>
@@ -193,7 +194,50 @@
                     <input type="tel" name="phone_last4" required pattern="\d{4}" maxlength="4" class="w-full bg-gray-50 border-2 border-gray-200 rounded-xl p-3 focus:border-pop-cyan font-mono text-xl text-center tracking-widest" placeholder="1234">
                 </div>
                 <button type="submit" class="w-full bg-pop-cyan text-white font-bold py-3 rounded-xl shadow-lg mt-2 hover:brightness-110 transition">ログインして予約へ</button>
+                
+                <div class="mt-4 text-center">
+                    <button type="button" onclick="closeModal('loginModal'); openModal('forgotIdModal');" class="text-sm font-bold text-pop-cyan underline hover:text-pop-pink transition">会員IDを忘れた方はこちら</button>
+                </div>
+
+                <div class="mt-6 text-center border-t-2 border-gray-100 pt-4">
+                    <a href="https://kbperk.github.io/main/" class="text-sm font-bold text-gray-400 hover:text-gray-600 transition">◀ TOPへ戻る</a>
+                </div>
             </form>
+        </div>
+    </div>
+
+    <div id="forgotIdModal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-pop-dim backdrop-blur-sm" onclick="closeModal('forgotIdModal')"></div>
+        <div class="relative w-full max-w-md bg-white rounded-3xl p-6 shadow-2xl animate-pop-in">
+            <button onclick="closeModal('forgotIdModal')" class="absolute top-4 right-4 text-2xl text-gray-400 hover:text-gray-600">×</button>
+            <h3 class="text-2xl font-bold text-center mb-6 text-pop-cyan">会員IDの照会</h3>
+            <form id="forgotIdForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-bold text-gray-500 mb-1">フルネーム</label>
+                    <input type="text" name="name" required class="w-full bg-gray-50 border-2 border-gray-200 rounded-xl p-3 focus:border-pop-cyan font-bold text-lg" placeholder="例: 広島 太郎">
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-gray-500 mb-1">登録メールアドレス</label>
+                    <input type="email" name="email" required class="w-full bg-gray-50 border-2 border-gray-200 rounded-xl p-3 focus:border-pop-cyan font-bold text-lg" placeholder="例: info@example.com">
+                </div>
+                <button type="submit" class="w-full bg-pop-cyan text-white font-bold py-3 rounded-xl shadow-lg mt-2 hover:brightness-110 transition">照会する</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="forgotIdResultModal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-pop-dim backdrop-blur-sm" onclick="closeModal('forgotIdResultModal')"></div>
+        <div class="relative w-full max-w-md bg-white rounded-3xl p-6 shadow-2xl text-center animate-pop-in">
+            <button onclick="closeModal('forgotIdResultModal')" class="absolute top-4 right-4 text-2xl text-gray-400 hover:text-gray-600">×</button>
+            <div class="text-5xl mb-4">✨</div>
+            <h3 class="text-xl font-bold mb-4 text-pop-cyan">照会成功</h3>
+            <p class="text-sm font-bold text-gray-600 mb-2 leading-relaxed">あなたの会員IDは下記のとおりです。<br>忘れないようにメモしてください。</p>
+            
+            <div class="bg-gray-100 py-4 rounded-xl mb-6 border-2 border-gray-200">
+                <span class="text-3xl font-mono font-black text-pop-cyan tracking-widest" id="forgotIdResultText">----------</span>
+            </div>
+            
+            <button id="forgotIdResultLoginBtn" class="w-full bg-pop-cyan text-white font-bold py-3 rounded-xl shadow-lg hover:brightness-110 transition">ログインをする</button>
         </div>
     </div>
 
@@ -228,8 +272,8 @@
                 </div>
                 <div class="grid grid-cols-2 gap-3">
                     <div>
-                        <label class="block text-xs font-bold text-gray-500">生年月日</label>
-                        <input type="date" name="birth_date" required class="w-full bg-gray-50 border-2 border-gray-200 rounded-lg p-2 focus:border-pop-pink">
+                        <label class="block text-xs font-bold text-gray-500">生年月日 (8桁の数字)</label>
+                        <input type="tel" name="birth_date" required maxlength="8" pattern="\d{8}" inputmode="numeric" class="w-full bg-gray-50 border-2 border-gray-200 rounded-lg p-2 focus:border-pop-pink" placeholder="例：19790808">
                     </div>
                     <div>
                         <label class="block text-xs font-bold text-gray-500">メールアドレス</label>
@@ -342,12 +386,6 @@
                 <div>
                     <label class="block text-sm font-bold text-gray-500 mb-1">来店人数</label>
                     <select name="head_count" class="w-full bg-gray-50 border-2 border-gray-200 rounded-xl p-3 font-bold text-lg text-center focus:border-pop-green">
-                        <option value="1">1名</option>
-                        <option value="2">2名</option>
-                        <option value="3">3名</option>
-                        <option value="4">4名</option>
-                        <option value="5">5名</option>
-                        <option value="6">6名</option>
                     </select>
                 </div>
                 <div class="text-sm text-gray-500">
@@ -381,7 +419,6 @@
         function closeMessageModal(){ document.getElementById('messageModal').classList.add('hidden'); }
         function closeConfirmModal(){ document.getElementById('confirmModal').classList.add('hidden'); }
     </script>
-<!-- 規約同意（予約確定前・毎回） -->
 <div id="termsReserveModal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
     <div class="absolute inset-0 bg-pop-dim backdrop-blur-sm" onclick="closeModal('termsReserveModal')"></div>
     <div class="relative w-full max-w-lg bg-white rounded-3xl p-5 shadow-2xl animate-pop-in">
@@ -409,4 +446,3 @@
 </div>
 </body>
 </html>
-

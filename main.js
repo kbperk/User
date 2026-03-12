@@ -21,12 +21,26 @@ const STATE = {
     selectedSlotWaitlist: false
 };
 
-// ローディング制御（ネスト呼び出しでも1回の通信で画像が入れ替わらないようにする）
+// ローディング制御
 const LOADER_STATE = {
     count: 0,
     usePanda: false
 };
 
+// 初回表示で「裏方が一瞬見える」問題を抑止
+(function(){
+    try{
+        document.documentElement.classList.add('kb-booting');
+        const st = document.createElement('style');
+        st.id = 'kbBootStyle';
+        st.textContent = `
+            .kb-booting body > :not(#loadingOverlay):not(#loaderOverlay):not(#loader) { visibility: hidden !important; }
+            .kb-booting #loadingOverlay, .kb-booting #loaderOverlay, .kb-booting #loader { display: flex !important; }
+            .kb-booting #loadingOverlay.hidden, .kb-booting #loaderOverlay.hidden, .kb-booting #loader.hidden { display: flex !important; }
+        `;
+        document.head.appendChild(st);
+    }catch(_){}
+})();
 
 function getDeviceId_(){
     try{
@@ -47,31 +61,50 @@ function getDeviceId_(){
 // ==========================================
 
 document.addEventListener('DOMContentLoaded', async () => {
-    // セッション復元
+    try {
+    showLoader(true);
     loadUserSession();
     
-    // カレンダー操作ボタンのイベント設定
     const prevBtn = document.getElementById('prevMonthBtn');
     const nextBtn = document.getElementById('nextMonthBtn');
     if(prevBtn) prevBtn.addEventListener('click', () => changeMonth(-1));
     if(nextBtn) nextBtn.addEventListener('click', () => changeMonth(1));
 
-    // ★修正: 会員証ボタンにクリックイベントを追加（念押し）
     const qrBtn = document.querySelector('button[onclick="openModal(\'qrModal\')"]');
     if(qrBtn) {
         qrBtn.onclick = (e) => {
-            e.preventDefault(); // デフォルト動作防止
+            e.preventDefault(); 
             showQrModal();
         };
     }
 
-    // データ取得開始
-    await initAppData();
+    const headCountSelect = document.querySelector('#reserveForm select[name="head_count"]');
+    if (headCountSelect) {
+        headCountSelect.addEventListener('change', updateReserveAmountDisplay_);
+    }
 
+    const tasks = [initAppData()];
+    if (STATE.user) {
+        tasks.push(loadMyReservations());
+    }
+    await Promise.all(tasks);
 
+    try{
+        const raw = sessionStorage.getItem('kb_flash_after_reload');
+        if(raw){
+            sessionStorage.removeItem('kb_flash_after_reload');
+            const o = JSON.parse(raw);
+            if(o && o.text){
+                showMessageModal(o.type || 'info', String(o.text));
+            }
+        }
+    }catch(_){}
+
+    } finally {
+        showLoader(false);
+    }
 });
 
-// 月を切り替える処理
 function changeMonth(offset) {
     const d = STATE.currentMonth;
     d.setDate(1); 
@@ -82,7 +115,6 @@ function changeMonth(offset) {
 }
 
 async function initAppData() {
-    showLoader(true);
     try {
         const res = await callApi('get_slots', {});
         if (res.slots) {
@@ -92,20 +124,17 @@ async function initAppData() {
         }
     } catch (e) {
         console.error(e);
-        // 初回ロード失敗時はサイレントにするか、控えめに表示
     } finally {
-        showLoader(false);
+        try{ document.documentElement.classList.remove('kb-booting'); const st=document.getElementById('kbBootStyle'); if(st) st.remove(); }catch(_){ }
     }
 }
 
-// 汎用API呼び出し
 async function callApi(action, params = {}) {
     showLoader(true);
     try{
     const device_id = getDeviceId_();
     const payload = { action, ...params };
 
-    // スパム対策（サーバ側検証用）
     if (['get_slots','reserve','cancel','my_reservations'].includes(action)) {
         payload.device_id = device_id;
     }
@@ -125,7 +154,6 @@ async function callApi(action, params = {}) {
     }
 }
 
-
 async function loadMyReservations() {
     if (!STATE.user) return;
     try {
@@ -142,21 +170,32 @@ function renderMyReservations(items) {
     const empty = document.getElementById('myReservationsEmpty');
     if (!wrap) return;
     wrap.innerHTML = '';
-    if (!items || items.length === 0) {
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const futureItems = items.filter(it => {
+        if (!it.date) return true;
+        const d = new Date(it.date);
+        d.setHours(0, 0, 0, 0);
+        return d >= today;
+    });
+
+    if (!futureItems || futureItems.length === 0) {
         if (empty) empty.classList.remove('hidden');
         return;
     }
     if (empty) empty.classList.add('hidden');
 
-    items.forEach(it => {
+    futureItems.forEach(it => {
         const div = document.createElement('div');
         div.className = 'border-2 border-gray-200 rounded-2xl p-4 bg-white';
         const cancelBtn = it.cancelable
-            ? `<button class="mt-3 w-full bg-red-600 text-white font-bold py-3 rounded-xl shadow hover:brightness-110 transition" data-resid="${it.reservation_id}">キャンセルする</button>`
+            ? `<button class="mt-3 w-full bg-red-600 text-white font-bold py-3 rounded-xl shadow hover:brightness-110 transition" data-resid="${it.reservation_id}" data-wait="${it.is_waitlist ? 1 : 0}">キャンセルする</button>`
             : `<div class="mt-3 text-sm text-gray-500">※キャンセル締切（前日）を過ぎています。当日キャンセルは全額負担となります。</div>`;
         div.innerHTML = `
             <div class="flex items-baseline justify-between">
                 <div class="text-lg font-black text-pop-green">${it.date} ${it.time}</div>
+                ${it.is_waitlist ? `<div class="mt-1 inline-block text-xs font-black bg-yellow-200 text-yellow-900 px-2 py-1 rounded-lg">キャンセル待ち</div>` : ``}
                 <div class="text-lg font-black">${it.head_count}名</div>
             </div>
             <div class="mt-1 text-sm text-gray-600">料金: <span class="font-bold text-blue-600">${Number(it.amount||0).toLocaleString('ja-JP')}円（税込）</span></div>
@@ -169,16 +208,14 @@ function renderMyReservations(items) {
         btn.addEventListener('click', async () => {
             const resid = btn.getAttribute('data-resid');
             if (!resid) return;
-            const ok = await confirmModal('この予約をキャンセルします。よろしいですか？','キャンセルする','やめる');
+            const ok = await confirmModal((btn.getAttribute('data-wait')==='1' ? 'このキャンセル待ちをキャンセルします。よろしいですか？' : 'この予約をキャンセルします。よろしいですか？'),'キャンセルする','やめる');
             if (!ok) return;
             try {
                 showLoader(true);
                 await callApi('cancel', { member_id: STATE.user.member_id, reservation_id: resid });
-                showMessageModal('info','キャンセルを受け付けました。');
-                await initAppData();
-
-
-                await loadMyReservations();
+                await showAlert('キャンセル受付', 'キャンセルが完了しました。\nOKを押すと画面を更新します。');
+                showLoader(true);
+                window.location.reload();
             } catch (e) {
                 showMessageModal('error', e.message || String(e));
             } finally {
@@ -188,16 +225,13 @@ function renderMyReservations(items) {
     });
 }
 
-
 // ==========================================
-// 2A. 時刻系ユーティリティ（過去枠ブロック）
+// 2A. 時刻系ユーティリティ
 // ==========================================
 function nowTokyo_(){
-    // ブラウザのローカル時刻をそのまま使用（運用は日本想定）
     return new Date();
 }
 function parseSlotDateTime_(dateStr, timeStr){
-    // dateStr: YYYY-MM-DD, timeStr: HH:MM
     const m = String(dateStr||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
     const t = String(timeStr||'').match(/^(\d{2}):(\d{2})/);
     if(!m || !t) return null;
@@ -214,7 +248,6 @@ function isPastDay_(dateStr){
     return day < today;
 }
 function isPastSlotByCutoff_(dateStr, timeStr){
-    // 「現在時刻の1時間前から予約不可」＝開始時刻が (今 - 60分) より前ならブロック
     const now = nowTokyo_();
     const cutoff = new Date(now.getTime() - 60*60*1000);
     const st = parseSlotDateTime_(dateStr, timeStr);
@@ -234,7 +267,7 @@ function renderCalendar(slots) {
 
     const viewDate = STATE.currentMonth;
     const year = viewDate.getFullYear();
-    const month = viewDate.getMonth(); // 0-11
+    const month = viewDate.getMonth(); 
     
     label.textContent = `${year}年 ${month + 1}月`;
 
@@ -242,12 +275,10 @@ function renderCalendar(slots) {
     const startDow = firstDay.getDay(); 
     const endDay = new Date(year, month + 1, 0).getDate();
 
-    // 空白セル
     for (let i = 0; i < startDow; i++) {
         grid.appendChild(document.createElement('div'));
     }
 
-    // 日付セル
     for (let d = 1; d <= endDay; d++) {
         const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
         const daySlots = slots.filter(s => s.date === dateStr);
@@ -256,7 +287,6 @@ function renderCalendar(slots) {
 
         const isFull = isOpen && daySlots.every(s => s.remaining === 0);
 
-        // 「残り僅か」判定は日単位の総量で行う（どこか1枠だけ残少で黄色になる事故を防ぐ）
         const totalCap = daySlots.reduce((sum, s) => sum + Number(s.capacity_max || 0), 0);
         const totalRemaining = daySlots.reduce((sum, s) => sum + Number(s.remaining || 0), 0);
         const isFew = isOpen && totalRemaining > 0 && totalCap > 0 && (totalRemaining / totalCap) <= 0.25;
@@ -280,7 +310,6 @@ function renderCalendar(slots) {
         btn.innerHTML = `<span class="text-lg font-bold font-english">${d}</span>`;
         
         if (isOpen) {
-            // 過去日は「済」表示して選択不可
             if(isPastDay){
                 const stamp = document.createElement('span');
                 stamp.className = 'kb-stamp-done';
@@ -323,31 +352,25 @@ function renderTimeSlots(daySlots) {
         const isFull = slot.remaining === 0;
         const isPast = isPastDay_(slot.date) || isPastSlotByCutoff_(slot.date, slot.start_time);
 
-        // 満席でも「キャンセル待ち」は押せる（過去枠は不可）
-        const canWaitlist = isFull && !isPast;
-
         btn.className = `p-3 rounded-xl border-2 font-bold flex justify-between items-center transition ${
             (isPast)
             ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
-            : (canWaitlist
-                ? 'bg-white border-pop-yellow text-pop-text hover:bg-pop-yellow hover:text-black'
-                : (isFull
-                    ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
-                    : 'bg-white border-pop-cyan text-pop-text hover:bg-pop-cyan hover:text-white'
-                )
+            : (isFull
+                ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
+                : 'bg-white border-pop-cyan text-pop-text hover:bg-pop-cyan hover:text-white'
             )
         }`;
-        btn.disabled = isPast || (isFull && !canWaitlist);
+        btn.disabled = isPast || isFull;
 
         const rightBadge = isPast
             ? '済'
-            : (canWaitlist ? 'キャンセル待ち' : (isFull ? '満員' : ('残'+slot.remaining)));
+            : (isFull ? '満員でっせ！' : ('残'+slot.remaining));
 
         const rightClass = isPast
             ? 'bg-red-100 text-red-700 px-2 py-1 rounded-full border border-red-300'
-            : (canWaitlist
-                ? 'bg-pop-yellow text-black px-2 py-1 rounded-full border border-yellow-300'
-                : (isFull ? '' : 'bg-pop-yellow text-black px-2 py-1 rounded-full'));
+            : (isFull 
+                ? 'bg-red-500 text-white px-2 py-1 rounded-full border border-red-600 text-[10px] md:text-xs' 
+                : 'bg-pop-yellow text-black px-2 py-1 rounded-full');
 
         btn.innerHTML = `
             <span class="font-english text-lg">${slot.start_time}</span>
@@ -356,12 +379,8 @@ function renderTimeSlots(daySlots) {
             </span>
         `;
 
-        if (!isPast) {
-            if (canWaitlist) {
-                btn.onclick = () => onSlotSelect(slot, { waitlist: true });
-            } else if (!isFull) {
-                btn.onclick = () => onSlotSelect(slot, { waitlist: false });
-            }
+        if (!isPast && !isFull) {
+            btn.onclick = () => onSlotSelect(slot, { waitlist: false });
         }
         container.appendChild(btn);
     });
@@ -382,14 +401,26 @@ function onSlotSelect(slot, opts = {}) {
     document.getElementById('resSlotId').value = slot.slot_id;
     document.getElementById('resOwnerName').textContent = STATE.user.name;
 
-// 料金表示（設定ONのときのみ）
-updateReserveAmountDisplay_();
+    const selectEl = document.querySelector('#reserveForm select[name="head_count"]');
+    if (selectEl) {
+        selectEl.innerHTML = '';
+        const maxHead = Math.max(1, slot.remaining || 1);
+        for (let i = 1; i <= maxHead; i++) {
+            const opt = document.createElement('option');
+            opt.value = String(i);
+            opt.textContent = i + '名';
+            selectEl.appendChild(opt);
+        }
+        selectEl.value = "1";
+    }
+
+    updateReserveAmountDisplay_();
     openModal('reserveModal');
 }
 
-
 let TERMS_AGREED_THIS_TIME = false;
 
+// ★ 変更箇所: 人数変更時にキャンペーン値引きをUIに表示
 function updateReserveAmountDisplay_(){
     const el = document.getElementById('resAmount');
     if(!el) return;
@@ -401,9 +432,14 @@ function updateReserveAmountDisplay_(){
     const unit = Number(s.unitPrice || 0) || 0;
     const amount = head * unit;
 
-    if(pricingEnabled && unit > 0){
+    if(pricingEnabled){
         const label = (s.dayType === 'weekend_holiday') ? '土日祝（週末扱い）' : '平日';
-        el.innerHTML = `利用料金（${label}）: <span class="font-black text-blue-600">${amount.toLocaleString('ja-JP')}円（税込）</span>`;
+        let campHtml = '';
+        // キャンペーン中であればピンク色のバッジでアピール
+        if (s.isCampaign && s.campaignDiscount > 0) {
+            campHtml = `<div class="text-xs text-pop-pink font-bold mt-1">🎁 キャンペーン適用中！(1人あたり -${s.campaignDiscount}円)</div>`;
+        }
+        el.innerHTML = `利用料金（${label}）: <span class="font-black text-blue-600">${amount.toLocaleString('ja-JP')}円（税込）</span>${campHtml}`;
         el.classList.remove('hidden');
     }else{
         el.classList.add('hidden');
@@ -416,7 +452,6 @@ function openTermsBeforeReserve_(){
     const modal = document.getElementById('termsReserveModal');
     if(!modal) return false;
 
-    // 規約本文をコピー（登録画面の規約BOXを流用）
     const src = document.getElementById('termsBox');
     const body = document.getElementById('termsReserveBody');
     if(src && body){
@@ -428,17 +463,13 @@ function openTermsBeforeReserve_(){
     const lbl = document.getElementById('termsReserveLabel');
     const btn = document.getElementById('termsReserveAgreeBtn');
     if(sc && chk && btn){
-        // 初期状態：開いた瞬間は絶対にチェック不可
         chk.checked = false;
         chk.disabled = true;
         chk.style.pointerEvents = 'none';
         if(lbl){ lbl.classList.remove('text-gray-900'); lbl.classList.add('text-gray-400'); lbl.style.pointerEvents = 'none'; }
         btn.disabled = true;
 
-        // スクロール位置は必ずトップから開始
         sc.scrollTop = 0;
-
-        // 「スクロール操作必須」を厳格化：scrollイベントが発火するまで解除しない
         let hasUserScrolled = false;
 
         const updateGate = () => {
@@ -451,7 +482,6 @@ function openTermsBeforeReserve_(){
                     lbl.style.pointerEvents = 'auto';
                 }
             } else {
-                // 下まで到達していない状態ではチェック不可・同意ボタンも不可
                 chk.checked = false;
                 chk.disabled = true;
                 chk.style.pointerEvents = 'none';
@@ -468,16 +498,14 @@ function openTermsBeforeReserve_(){
             updateGate();
         };
 
-        // 開いた直後も必ず無効状態に固定
         updateGate();
 
         chk.onchange = () => {
             btn.disabled = (!chk.checked || chk.disabled);
         };
-btn.onclick = () => {
+        btn.onclick = () => {
             TERMS_AGREED_THIS_TIME = true;
             closeModal('termsReserveModal');
-            // 予約確定処理へ戻すため、フォーム送信を再実行
             const f = document.getElementById('reserveForm');
             if(f){
                 f.requestSubmit();
@@ -490,10 +518,9 @@ btn.onclick = () => {
 }
 
 // ==========================================
-// 3. 認証 (ログイン/登録)
+// 3. 認証 (ログイン/登録/ID忘れ救済)
 // ==========================================
 
-// ログイン
 document.getElementById('loginForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const form = e.target;
@@ -521,7 +548,55 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
     }
 });
 
-// 住所検索
+const forgotIdForm = document.getElementById('forgotIdForm');
+if(forgotIdForm) {
+    forgotIdForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const form = e.target;
+        const btn = form.querySelector('button');
+        
+        const params = {
+            name: form.name.value.trim(),
+            email: form.email.value.trim()
+        };
+
+        btn.disabled = true;
+        btn.textContent = '照会中...';
+
+        try {
+            const res = await callApi('forgot_id', params);
+            
+            document.getElementById('forgotIdResultText').textContent = res.member_id;
+            closeModal('forgotIdModal');
+            openModal('forgotIdResultModal');
+            
+            form.reset();
+        } catch (err) {
+            showMessageModal('error', err.message, '照会失敗');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '照会する';
+        }
+    });
+}
+
+const forgotIdResultLoginBtn = document.getElementById('forgotIdResultLoginBtn');
+if (forgotIdResultLoginBtn) {
+    forgotIdResultLoginBtn.addEventListener('click', () => {
+        const idText = document.getElementById('forgotIdResultText').textContent;
+        closeModal('forgotIdResultModal');
+        openModal('loginModal');
+        
+        const loginForm = document.getElementById('loginForm');
+        if (loginForm && loginForm.member_id) {
+            loginForm.member_id.value = idText;
+            if (loginForm.phone_last4) {
+                setTimeout(() => loginForm.phone_last4.focus(), 100);
+            }
+        }
+    });
+}
+
 document.getElementById('btnZipSearch').addEventListener('click', async () => {
     const zipInput = document.getElementById('regZip');
     const addrInput = document.getElementById('regAddress');
@@ -551,12 +626,18 @@ document.getElementById('btnZipSearch').addEventListener('click', async () => {
     }
 });
 
-// 新規登録
 document.getElementById('registerForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const form = e.target;
     const btn = form.querySelector('button');
     const fullAddress = form.address.value + ' ' + form.address_street.value;
+
+    const rawBirth = form.birth_date.value.replace(/[^\d]/g, '');
+    if(rawBirth.length !== 8){
+        showMessageModal('warn','生年月日は8桁の数字（例: 19790808）で入力してください。','入力エラー');
+        return;
+    }
+    const formattedBirth = `${rawBirth.substring(0,4)}-${rawBirth.substring(4,6)}-${rawBirth.substring(6,8)}`;
 
     const params = {
         name: form.name.value,
@@ -565,7 +646,7 @@ document.getElementById('registerForm').addEventListener('submit', async (e) => 
         email: form.email.value,
         zip_code: form.zip_code.value,
         address: fullAddress,
-        birth_date: form.birth_date.value
+        birth_date: formattedBirth
     };
     
     if(!form.address.value || !form.address_street.value) {
@@ -581,12 +662,10 @@ document.getElementById('registerForm').addEventListener('submit', async (e) => 
 
     try {
         const res = await callApi('register', params);
-        // 登録後、そのまま自動ログイン
         const user = { member_id: res.member_id, name: res.name, token: 'new_session' };
         saveUserSession(user);
         closeModal('registerModal');
         showMessageModal('info', `ようこそ！\nあなたの会員IDは【 ${res.member_id} 】です。\n忘れないようにメモしてください。`, '登録完了！');
-        // 登録直後もQRを表示
         showQrModal();
     } catch (err) {
         showMessageModal('error', err.message, '登録エラー');
@@ -597,16 +676,13 @@ document.getElementById('registerForm').addEventListener('submit', async (e) => 
 });
 
 // ==========================================
-// 4. セッション & UI管理 & ★QR表示
+// 4. セッション & UI管理 & QR表示
 // ==========================================
 
 function saveUserSession(user) {
     STATE.user = user;
     localStorage.setItem('kb_user_v3', JSON.stringify(user));
-
-// マイ予約を更新
-try{ loadMyReservations(); }catch(_){}
-
+    try{ loadMyReservations(); }catch(_){}
     updateHeaderUI();
 }
 function loadUserSession() {
@@ -633,7 +709,6 @@ function updateHeaderUI() {
         document.getElementById('dispMemberName').textContent = STATE.user.name + ' 様';
         document.getElementById('dispMemberId').textContent = STATE.user.member_id;
         
-        // ★UI更新時にQRコードもセット（念のため）
         updateQrImage();
         document.getElementById('qrMemberId').textContent = STATE.user.member_id;
     } else {
@@ -645,7 +720,6 @@ function updateHeaderUI() {
     }
 }
 
-// ★QRコードモーダル表示処理（新規追加）
 function showQrModal() {
     if (!STATE.user) return;
     updateQrImage();
@@ -653,15 +727,10 @@ function showQrModal() {
     openModal('qrModal');
 }
 
-// ★QRコード画像のURL生成とセット（新規追加）
 function updateQrImage() {
     if (!STATE.user || !STATE.user.member_id) return;
-    
-    // 安全にエンコードしてURL生成
     const safeId = encodeURIComponent(STATE.user.member_id);
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${safeId}`;
-    
-    // 画像要素にセット
     const imgEl = document.getElementById('qrImage');
     if(imgEl) {
         imgEl.src = qrUrl;
@@ -669,7 +738,6 @@ function updateQrImage() {
     }
 }
 
-// ログアウト
 document.getElementById('headerLogoutBtn').onclick = async () => {
     const ok = await showConfirm('ログアウト', 'ログアウトしますか？');
     if(ok){
@@ -688,7 +756,6 @@ document.getElementById('reserveForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     if (!STATE.user || !STATE.selectedSlot) return;
 
-    // 毎回: 規約スクロール必須 → 同意チェック
     if (!TERMS_AGREED_THIS_TIME) {
         openTermsBeforeReserve_();
         return;
@@ -701,7 +768,9 @@ document.getElementById('reserveForm').addEventListener('submit', async (e) => {
     const head = Number(form.head_count.value);
     const unit = Number((STATE.selectedSlot && STATE.selectedSlot.unitPrice) ? STATE.selectedSlot.unitPrice : 0) || 0;
     const pricingEnabled = !!(STATE.settings && (STATE.settings.pricingEnabled === true || String(STATE.settings.pricingEnabled||'').toLowerCase()==='true'));
-    const estAmount = (pricingEnabled && unit>0) ? (head * unit) : 0;
+    
+    // UIで計算した結果をAPIに送る（最終的な保存額はバックエンドで厳密に再計算されます）
+    const estAmount = pricingEnabled ? (head * unit) : 0;
 
     const params = {
         member_id: STATE.user.member_id,
@@ -718,18 +787,10 @@ document.getElementById('reserveForm').addEventListener('submit', async (e) => {
         const reserveRes = await callApi('reserve', params);
         closeModal('reserveModal');
 
-        const mail = reserveRes && reserveRes.mail ? reserveRes.mail : null;
-        if (mail && (mail.user === false || mail.admin === false)) {
-            showMessageModal('warn','予約は完了しましたが、通知メール送信に一部失敗しました。管理者へ確認してください。');
-        } else {
-            showMessageModal('info','予約が完了しました！');
-        }
+        await showAlert('予約完了', 'ご予約が完了いたしました！\nOKを押すと最新の予約状況に更新します。');
 
-        await initAppData();
-
-
-        await loadMyReservations();
-
+        showLoader(true);
+        window.location.reload();
     } catch (e) {
         showMessageModal('error', e.message || String(e));
     } finally {
@@ -746,11 +807,9 @@ function showLoader(show){
     const ov = document.getElementById('loadingOverlay') || document.getElementById('loaderOverlay') || document.getElementById('loader');
     if(!ov) return;
 
-    // ネスト（initAppData → callApi 等）でも1回の通信で画像が入れ替わらないように参照カウントで制御
     if(show){
         LOADER_STATE.count = (LOADER_STATE.count || 0) + 1;
 
-        // 0→1 のタイミングでのみランダム決定（この通信中は固定）
         if(LOADER_STATE.count === 1){
             LOADER_STATE.usePanda = (Math.random() < 0.5);
         }
@@ -767,14 +826,12 @@ function showLoader(show){
     } else {
         LOADER_STATE.count = Math.max(0, (LOADER_STATE.count || 0) - 1);
         if(LOADER_STATE.count > 0){
-            // まだ別の通信が残っているので閉じない
             return;
         }
 
         ov.classList.add('hidden');
         ov.classList.remove('flex');
 
-        // 次回表示に備えて初期化
         LOADER_STATE.usePanda = false;
 
         const panda = document.getElementById('loaderImgPanda');
@@ -799,6 +856,27 @@ function showMessage(title, body, type = 'blue') {
     btn.className = `w-full py-3 rounded-xl font-bold text-white shadow-md transition transform active:scale-95 ${colorClass} hover:brightness-110`;
     
     modal.classList.remove('hidden');
+}
+
+function showAlert(title, body) {
+    return new Promise(resolve => {
+        const modal = document.getElementById('messageModal');
+        document.getElementById('msgTitle').textContent = title;
+        document.getElementById('msgBody').textContent = body;
+        document.getElementById('msgIcon').textContent = 'ℹ️';
+        
+        const btn = document.getElementById('msgBtn');
+        btn.className = `w-full py-3 rounded-xl font-bold text-white shadow-md transition transform active:scale-95 bg-msg-blue hover:brightness-110`;
+        
+        const cleanup = () => {
+            modal.classList.add('hidden');
+            btn.onclick = closeMessageModal;
+            resolve();
+        };
+        
+        btn.onclick = cleanup;
+        modal.classList.remove('hidden');
+    });
 }
 
 function showConfirm(title, body) {

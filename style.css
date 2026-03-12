@@ -150,3 +150,36 @@ input[readonly] {
 ::-webkit-scrollbar-thumb:hover {
     background: #FF69B4; /* ホバーでピンクに */
 }
+
+/* =========================================
+   背景の無限スクロール（新規追加）
+   ========================================= */
+.bg-scroll-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: -1;
+    overflow: hidden;
+    pointer-events: none;
+    background-color: #F0FFF4; /* ベース背景色 */
+}
+.bg-scroll-container::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 200%;
+    height: 100%;
+    /* 「画像の背景.png」のパスは実際の環境に合わせて変更してください */
+    background-image: url('./画像の背景.png'); 
+    background-repeat: repeat;
+    background-size: contain;
+    opacity: 0.08; /* 薄く表示して存在を和らげる */
+    animation: scrollBackground 40s linear infinite;
+}
+@keyframes scrollBackground {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+}
