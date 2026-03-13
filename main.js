@@ -211,15 +211,17 @@ function renderMyReservations(items) {
             const ok = await confirmModal((btn.getAttribute('data-wait')==='1' ? 'このキャンセル待ちをキャンセルします。よろしいですか？' : 'この予約をキャンセルします。よろしいですか？'),'キャンセルする','やめる');
             if (!ok) return;
             try {
-                showLoader(true);
+                // 自動でローディングが出るため手動のshowLoaderを削除
                 await callApi('cancel', { member_id: STATE.user.member_id, reservation_id: resid });
+                
+                // 通信が終わると自動でローディングが消え、ポップアップが最前面に出ます
                 await showAlert('キャンセル受付', 'キャンセルが完了しました。\nOKを押すと画面を更新します。');
+                
+                // 画面更新のためにもう一度ローディングを表示
                 showLoader(true);
                 window.location.reload();
             } catch (e) {
                 showMessageModal('error', e.message || String(e));
-            } finally {
-                showLoader(false);
             }
         });
     });
@@ -420,7 +422,6 @@ function onSlotSelect(slot, opts = {}) {
 
 let TERMS_AGREED_THIS_TIME = false;
 
-// ★ 変更箇所: 人数変更時にキャンペーン値引きをUIに表示
 function updateReserveAmountDisplay_(){
     const el = document.getElementById('resAmount');
     if(!el) return;
@@ -435,7 +436,6 @@ function updateReserveAmountDisplay_(){
     if(pricingEnabled){
         const label = (s.dayType === 'weekend_holiday') ? '土日祝（週末扱い）' : '平日';
         let campHtml = '';
-        // キャンペーン中であればピンク色のバッジでアピール
         if (s.isCampaign && s.campaignDiscount > 0) {
             campHtml = `<div class="text-xs text-pop-pink font-bold mt-1">🎁 キャンペーン適用中！(1人あたり -${s.campaignDiscount}円)</div>`;
         }
