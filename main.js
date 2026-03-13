@@ -1,21 +1,21 @@
 /**
- * KB PARK ユーザー画面ロジック (Ver 3.2: QRコード表示修正版)
- * - QRコード生成ロジックを強化
- * - 3ファイル分割バックエンド(Ver 3.1)対応
+ * KB PARK ユーザー画面ロジック
+ * - QRコード生成ロジックを強化・確実化
+ * - 予約ボタン前に「会員のみ」表記を追加
+ * - 3ファイル分割バックエンド対応
  */
 
 // ★ GASのウェブアプリURL
-// ※デプロイして発行された最新のURLをここに貼り付けてください
-console.log('[KB] main.js loaded: 2026-02-22 waitlist=v1 loader=v2');
+console.log('[KB] main.js loaded: QR Fix & Member Only Notice Added');
 
 const API_URL = 'https://script.google.com/macros/s/AKfycbwkkj4vp6v9gfjLZIxsLN-1aaUjyQebngxfTuMDPz62x_xg4dCadey920wmL3IYtS82kA/exec';
 
 // 状態管理
 const STATE = {
-    user: null,         // ログイン中のユーザー情報
-    slots: [],          // 取得した予約枠データ
-    settings: {},       // システム設定
-    currentMonth: new Date(), // 現在表示中の月
+    user: null,         
+    slots: [],          
+    settings: {},       
+    currentMonth: new Date(), 
     selectedDate: null,
     selectedSlot: null,
     selectedSlotWaitlist: false
@@ -62,43 +62,47 @@ function getDeviceId_(){
 
 document.addEventListener('DOMContentLoaded', async () => {
     try {
-    showLoader(true);
-    loadUserSession();
-    
-    const prevBtn = document.getElementById('prevMonthBtn');
-    const nextBtn = document.getElementById('nextMonthBtn');
-    if(prevBtn) prevBtn.addEventListener('click', () => changeMonth(-1));
-    if(nextBtn) nextBtn.addEventListener('click', () => changeMonth(1));
+        showLoader(true);
+        loadUserSession();
+        
+        const prevBtn = document.getElementById('prevMonthBtn');
+        const nextBtn = document.getElementById('nextMonthBtn');
+        if(prevBtn) prevBtn.addEventListener('click', () => changeMonth(-1));
+        if(nextBtn) nextBtn.addEventListener('click', () => changeMonth(1));
 
-    const qrBtn = document.querySelector('button[onclick="openModal(\'qrModal\')"]');
-    if(qrBtn) {
-        qrBtn.onclick = (e) => {
-            e.preventDefault(); 
-            showQrModal();
-        };
-    }
-
-    const headCountSelect = document.querySelector('#reserveForm select[name="head_count"]');
-    if (headCountSelect) {
-        headCountSelect.addEventListener('change', updateReserveAmountDisplay_);
-    }
-
-    const tasks = [initAppData()];
-    if (STATE.user) {
-        tasks.push(loadMyReservations());
-    }
-    await Promise.all(tasks);
-
-    try{
-        const raw = sessionStorage.getItem('kb_flash_after_reload');
-        if(raw){
-            sessionStorage.removeItem('kb_flash_after_reload');
-            const o = JSON.parse(raw);
-            if(o && o.text){
-                showMessageModal(o.type || 'info', String(o.text));
+        // ▼ 修正：QRボタンの動作を確実にするための強力なフック
+        document.querySelectorAll('button').forEach(btn => {
+            const oc = btn.getAttribute('onclick');
+            if (oc && (oc.includes("qrModal") || oc.includes("showQrModal"))) {
+                btn.removeAttribute('onclick');
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    showQrModal();
+                });
             }
+        });
+
+        const headCountSelect = document.querySelector('#reserveForm select[name="head_count"]');
+        if (headCountSelect) {
+            headCountSelect.addEventListener('change', updateReserveAmountDisplay_);
         }
-    }catch(_){}
+
+        const tasks = [initAppData()];
+        if (STATE.user) {
+            tasks.push(loadMyReservations());
+        }
+        await Promise.all(tasks);
+
+        try{
+            const raw = sessionStorage.getItem('kb_flash_after_reload');
+            if(raw){
+                sessionStorage.removeItem('kb_flash_after_reload');
+                const o = JSON.parse(raw);
+                if(o && o.text){
+                    showMessageModal(o.type || 'info', String(o.text));
+                }
+            }
+        }catch(_){}
 
     } finally {
         showLoader(false);
@@ -132,23 +136,23 @@ async function initAppData() {
 async function callApi(action, params = {}) {
     showLoader(true);
     try{
-    const device_id = getDeviceId_();
-    const payload = { action, ...params };
+        const device_id = getDeviceId_();
+        const payload = { action, ...params };
 
-    if (['get_slots','reserve','cancel','my_reservations'].includes(action)) {
-        payload.device_id = device_id;
-    }
+        if (['get_slots','reserve','cancel','my_reservations'].includes(action)) {
+            payload.device_id = device_id;
+        }
 
-    const body = JSON.stringify(payload);
-    const response = await fetch(API_URL, {
-        method: 'POST',
-        mode: 'cors',
-        headers: { 'Content-Type': 'text/plain' },
-        body: body
-    });
-    const json = await response.json();
-    if (!json.ok) throw new Error(json.error || 'API Error');
-    return json.data;
+        const body = JSON.stringify(payload);
+        const response = await fetch(API_URL, {
+            method: 'POST',
+            mode: 'cors',
+            headers: { 'Content-Type': 'text/plain' },
+            body: body
+        });
+        const json = await response.json();
+        if (!json.ok) throw new Error(json.error || 'API Error');
+        return json.data;
     } finally {
         showLoader(false);
     }
@@ -211,13 +215,8 @@ function renderMyReservations(items) {
             const ok = await confirmModal((btn.getAttribute('data-wait')==='1' ? 'このキャンセル待ちをキャンセルします。よろしいですか？' : 'この予約をキャンセルします。よろしいですか？'),'キャンセルする','やめる');
             if (!ok) return;
             try {
-                // 自動でローディングが出るため手動のshowLoaderを削除
                 await callApi('cancel', { member_id: STATE.user.member_id, reservation_id: resid });
-                
-                // 通信が終わると自動でローディングが消え、ポップアップが最前面に出ます
                 await showAlert('キャンセル受付', 'キャンセルが完了しました。\nOKを押すと画面を更新します。');
-                
-                // 画面更新のためにもう一度ローディングを表示
                 showLoader(true);
                 window.location.reload();
             } catch (e) {
@@ -414,6 +413,19 @@ function onSlotSelect(slot, opts = {}) {
             selectEl.appendChild(opt);
         }
         selectEl.value = "1";
+    }
+
+    // ▼ 修正：「ご予約は会員のみとなります」の注意書きを挿入
+    let noticeEl = document.getElementById('memberOnlyNotice');
+    if (!noticeEl) {
+        const reserveBtn = document.querySelector('#reserveForm button[type="submit"]');
+        if (reserveBtn) {
+            noticeEl = document.createElement('div');
+            noticeEl.id = 'memberOnlyNotice';
+            noticeEl.className = 'text-center text-sm font-bold text-pop-pink mt-4 mb-2';
+            noticeEl.textContent = '（ご予約は会員のみとなります）';
+            reserveBtn.parentNode.insertBefore(noticeEl, reserveBtn);
+        }
     }
 
     updateReserveAmountDisplay_();
@@ -710,7 +722,6 @@ function updateHeaderUI() {
         document.getElementById('dispMemberId').textContent = STATE.user.member_id;
         
         updateQrImage();
-        document.getElementById('qrMemberId').textContent = STATE.user.member_id;
     } else {
         headerArea.classList.add('hidden');
         authSection.classList.remove('hidden');
@@ -720,21 +731,41 @@ function updateHeaderUI() {
     }
 }
 
-function showQrModal() {
+// ▼ 修正：グローバル関数として確実にQRコードを生成・表示する
+window.showQrModal = function() {
     if (!STATE.user) return;
-    updateQrImage();
-    document.getElementById('qrMemberId').textContent = STATE.user.member_id;
-    openModal('qrModal');
-}
+    const safeId = encodeURIComponent(STATE.user.member_id);
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${safeId}`;
+    
+    // HTMLの構造に関わらず、確実にQR画像を探し出して書き換える
+    let imgEl = document.getElementById('qrImage');
+    if (!imgEl) {
+        const modal = document.getElementById('qrModal');
+        if (modal) imgEl = modal.querySelector('img');
+    }
+    
+    if (imgEl) {
+        imgEl.src = qrUrl;
+        console.log('QR Code generated:', qrUrl);
+    }
+    
+    const idEl = document.getElementById('qrMemberId');
+    if (idEl) idEl.textContent = STATE.user.member_id;
+    
+    if (typeof openModal === 'function') openModal('qrModal');
+};
 
 function updateQrImage() {
     if (!STATE.user || !STATE.user.member_id) return;
     const safeId = encodeURIComponent(STATE.user.member_id);
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${safeId}`;
-    const imgEl = document.getElementById('qrImage');
+    let imgEl = document.getElementById('qrImage');
+    if (!imgEl) {
+        const modal = document.getElementById('qrModal');
+        if (modal) imgEl = modal.querySelector('img');
+    }
     if(imgEl) {
         imgEl.src = qrUrl;
-        console.log('QR Code updated:', qrUrl);
     }
 }
 
@@ -769,7 +800,6 @@ document.getElementById('reserveForm').addEventListener('submit', async (e) => {
     const unit = Number((STATE.selectedSlot && STATE.selectedSlot.unitPrice) ? STATE.selectedSlot.unitPrice : 0) || 0;
     const pricingEnabled = !!(STATE.settings && (STATE.settings.pricingEnabled === true || String(STATE.settings.pricingEnabled||'').toLowerCase()==='true'));
     
-    // UIで計算した結果をAPIに送る（最終的な保存額はバックエンドで厳密に再計算されます）
     const estAmount = pricingEnabled ? (head * unit) : 0;
 
     const params = {
