@@ -8,7 +8,7 @@
 // ※デプロイして発行された最新のURLをここに貼り付けてください
 console.log('[KB] main.js loaded: 2026-02-22 waitlist=v1 loader=v2');
 
-const API_URL = 'https://script.google.com/macros/s/AKfycbxTbAzdXMPY5xTLP3c3VN9SPFxa1TQLk1M86JAkHh6an1_L-BL1xIoqp3ljdEkXZQid/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbzrsSooV2Trzhz55FOs5jkYVg6scPnTnVenqboeNurvdEQ9LS3OcWNoUqruGFgGIMUo/exec';
 
 // 状態管理
 const STATE = {
