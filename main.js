@@ -62,6 +62,18 @@ function getDeviceId_(){
 
 document.addEventListener('DOMContentLoaded', async () => {
     try {
+        // ▼ 修正：ご指定の並び順になるよう、トップ画面（authSection）にテキストを動的に挿入します
+        const authDesc = document.querySelector('#authSection p.text-gray-500');
+        if (authDesc && !document.getElementById('memberOnlyNoticeAuth')) {
+            authDesc.classList.remove('mb-8');
+            authDesc.classList.add('mb-2'); // 既存の余白を調整
+            const notice = document.createElement('p');
+            notice.id = 'memberOnlyNoticeAuth';
+            notice.className = 'text-pop-pink font-bold text-sm mb-8';
+            notice.textContent = '（ご予約は会員のみとなります）';
+            authDesc.parentNode.insertBefore(notice, authDesc.nextSibling);
+        }
+
         showLoader(true);
         loadUserSession();
         
@@ -70,7 +82,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if(prevBtn) prevBtn.addEventListener('click', () => changeMonth(-1));
         if(nextBtn) nextBtn.addEventListener('click', () => changeMonth(1));
 
-        // ▼ 修正：QRボタンの動作を確実にするための強力なフック
+        // ▼ QRボタンの動作を確実にするための強力なフック
         document.querySelectorAll('button').forEach(btn => {
             const oc = btn.getAttribute('onclick');
             if (oc && (oc.includes("qrModal") || oc.includes("showQrModal"))) {
@@ -415,19 +427,6 @@ function onSlotSelect(slot, opts = {}) {
         selectEl.value = "1";
     }
 
-    // ▼ 修正：「ご予約は会員のみとなります」の注意書きを挿入
-    let noticeEl = document.getElementById('memberOnlyNotice');
-    if (!noticeEl) {
-        const reserveBtn = document.querySelector('#reserveForm button[type="submit"]');
-        if (reserveBtn) {
-            noticeEl = document.createElement('div');
-            noticeEl.id = 'memberOnlyNotice';
-            noticeEl.className = 'text-center text-sm font-bold text-pop-pink mt-4 mb-2';
-            noticeEl.textContent = '（ご予約は会員のみとなります）';
-            reserveBtn.parentNode.insertBefore(noticeEl, reserveBtn);
-        }
-    }
-
     updateReserveAmountDisplay_();
     openModal('reserveModal');
 }
@@ -731,7 +730,7 @@ function updateHeaderUI() {
     }
 }
 
-// ▼ 修正：グローバル関数として確実にQRコードを生成・表示する
+// ▼ グローバル関数として確実にQRコードを生成・表示する
 window.showQrModal = function() {
     if (!STATE.user) return;
     const safeId = encodeURIComponent(STATE.user.member_id);
