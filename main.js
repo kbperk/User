@@ -456,7 +456,7 @@ function updateReserveAmountDisplay_(){
     }
 }
 
-// ★ 代替案B：規約モーダル内で2つのチェックボックスを制御する処理
+// ★ 代替案B：規約モーダル内で2つのチェックボックスを制御し、見た目（クラス）を確実に入れ替える処理
 function openTermsBeforeReserve_(){
     TERMS_AGREED_THIS_TIME = false;
     const modal = document.getElementById('termsReserveModal');
@@ -476,20 +476,19 @@ function openTermsBeforeReserve_(){
     const btn = document.getElementById('termsReserveAgreeBtn');
 
     if(sc && chk && btn && chkCancel){
-        chk.checked = false;
-        chk.disabled = true;
-        chk.style.pointerEvents = 'none';
-        if(lbl){ lbl.classList.remove('text-gray-900'); lbl.classList.add('text-gray-400'); lbl.style.pointerEvents = 'none'; }
-
-        chkCancel.checked = false;
-        chkCancel.disabled = true;
-        chkCancel.style.pointerEvents = 'none';
-        if(lblCancel){ lblCancel.classList.remove('text-gray-900'); lblCancel.classList.add('text-gray-400'); lblCancel.style.pointerEvents = 'none'; }
-
-        btn.disabled = true;
-
-        sc.scrollTop = 0;
-        let hasUserScrolled = false;
+        
+        // ▼ 追加：ボタンのクラスをJSで制御し、緑とグレーを確実に切り替える
+        const checkState = () => {
+            const isReady = (chk.checked && chkCancel.checked && !chk.disabled && !chkCancel.disabled);
+            btn.disabled = !isReady;
+            if (isReady) {
+                // 両方チェックされたら緑色にする
+                btn.className = "mt-4 w-full bg-pop-green text-white font-bold py-4 rounded-xl shadow-lg text-lg hover:translate-y-1 hover:shadow-none transition";
+            } else {
+                // 条件を満たしていない場合は完全にグレーアウトする
+                btn.className = "mt-4 w-full bg-gray-300 text-gray-500 font-bold py-4 rounded-xl text-lg transition cursor-not-allowed";
+            }
+        };
 
         const updateGate = () => {
             const atBottom = (sc.scrollTop + sc.clientHeight) >= (sc.scrollHeight - 8);
@@ -521,20 +520,21 @@ function openTermsBeforeReserve_(){
                     lblCancel.classList.remove('text-gray-900'); lblCancel.classList.add('text-gray-400');
                     lblCancel.style.pointerEvents = 'none';
                 }
-                btn.disabled = true;
             }
+            // スクロール等の状態が変わった時も、ボタンの色を正しく合わせる
+            checkState();
         };
+
+        sc.scrollTop = 0;
+        let hasUserScrolled = false;
 
         sc.onscroll = () => {
             hasUserScrolled = true;
             updateGate();
         };
 
+        // 初回表示時にもボタンをグレーにするために呼び出す
         updateGate();
-
-        const checkState = () => {
-            btn.disabled = (!chk.checked || !chkCancel.checked || chk.disabled || chkCancel.disabled);
-        };
 
         chk.onchange = checkState;
         chkCancel.onchange = checkState;
