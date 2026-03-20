@@ -807,24 +807,30 @@ document.getElementById('reserveForm').addEventListener('submit', async (e) => {
     const form = e.target;
     const btn = form.querySelector('button');
 
-    const head = Number(form.head_count.value);
-    const unit = Number((STATE.selectedSlot && STATE.selectedSlot.unitPrice) ? STATE.selectedSlot.unitPrice : 0) || 0;
-    const pricingEnabled = !!(STATE.settings && (STATE.settings.pricingEnabled === true || String(STATE.settings.pricingEnabled||'').toLowerCase()==='true'));
-    
-    const estAmount = pricingEnabled ? (head * unit) : 0;
-
-    const params = {
-        member_id: STATE.user.member_id,
-        slot_id: STATE.selectedSlot.slot_id,
-        head_count: head,
-        amount: estAmount,
-        details: { note: 'Web予約' },
-        waitlist: !!STATE.selectedSlotWaitlist
-    };
-
+    // ★ 爆速化：計算の前にUIを即座に変更してローディングを出す
     btn.disabled = true;
     btn.textContent = '予約しています...';
+    showLoader(true);
+
+    // 画面の描画更新をブラウザに強制させる魔法の待機
+    await new Promise(resolve => setTimeout(resolve, 10));
+
     try {
+        const head = Number(form.head_count.value);
+        const unit = Number((STATE.selectedSlot && STATE.selectedSlot.unitPrice) ? STATE.selectedSlot.unitPrice : 0) || 0;
+        const pricingEnabled = !!(STATE.settings && (STATE.settings.pricingEnabled === true || String(STATE.settings.pricingEnabled||'').toLowerCase()==='true'));
+        
+        const estAmount = pricingEnabled ? (head * unit) : 0;
+
+        const params = {
+            member_id: STATE.user.member_id,
+            slot_id: STATE.selectedSlot.slot_id,
+            head_count: head,
+            amount: estAmount,
+            details: { note: 'Web予約' },
+            waitlist: !!STATE.selectedSlotWaitlist
+        };
+
         const reserveRes = await callApi('reserve', params);
         closeModal('reserveModal');
 
@@ -835,6 +841,7 @@ document.getElementById('reserveForm').addEventListener('submit', async (e) => {
     } catch (e) {
         showMessageModal('error', e.message || String(e));
     } finally {
+        showLoader(false); // 手動で出したローダーを消す
         btn.disabled = false;
         btn.textContent = '予約へ進む';
     }
