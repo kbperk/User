@@ -108,7 +108,8 @@
         <section id="authSection" class="bg-white rounded-3xl shadow-xl border-4 border-pop-green/30 p-8 text-center mb-12 transform transition-all hover:scale-[1.01]">
             <div class="mb-6"><span class="text-6xl">🔐</span></div>
             <h3 class="text-2xl font-bold mb-2">予約へ進む</h3>
-            <p class="text-gray-500 mb-8 text-sm">会員IDでログインしてください。<br>初めての方は登録（無料）をお願いします。</p>
+            <p class="text-pop-pink font-bold text-sm mb-8" id="memberOnlyNoticeAuth">（ご予約は会員のみとなります）</p>
+            <p class="text-gray-500 mb-2 text-sm">会員IDでログインしてください。<br>初めての方は登録（無料）をお願いします。</p>
             <div class="grid gap-4 md:grid-cols-2 max-w-lg mx-auto">
                 <button onclick="openModal('loginModal')" class="bg-pop-cyan text-white font-bold py-4 rounded-2xl shadow-[0_6px_0_rgb(30,170,160)] active:shadow-none active:translate-y-[6px] transition hover:brightness-110 flex items-center justify-center gap-2">
                     <span>🔑</span> ログイン
@@ -432,11 +433,20 @@
             <div id="termsReserveBody"></div>
         </div>
 
-        <div class="mt-3 flex items-start gap-2">
-            <input id="termsReserveCheck" disabled type="checkbox" class="mt-1 w-5 h-5">
-            <label id="termsReserveLabel" for="termsReserveCheck" class="text-sm text-gray-400">
-                上記の利用規約を最後まで確認し、同意します
-            </label>
+        <div class="mt-3 flex flex-col gap-3">
+            <div class="flex items-start gap-2">
+                <input id="termsReserveCheck" disabled type="checkbox" class="mt-1 w-5 h-5 text-pop-green focus:ring-pop-green border-gray-300 rounded">
+                <label id="termsReserveLabel" for="termsReserveCheck" class="text-sm text-gray-400 font-bold transition-colors">
+                    上記の利用規約を最後まで確認し、同意します
+                </label>
+            </div>
+            
+            <div class="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                <input id="cancelPolicyCheck" disabled type="checkbox" class="mt-1 w-5 h-5 text-red-500 focus:ring-red-500 border-gray-300 rounded">
+                <label id="cancelPolicyLabel" for="cancelPolicyCheck" class="text-sm text-gray-400 font-bold transition-colors leading-snug">
+                    <span class="text-red-500 font-black">【重要】</span><br>キャンセルは前日まで無料、<span class="text-red-500 underline decoration-red-500">当日キャンセルは全額請求</span>となることを理解しました。
+                </label>
+            </div>
         </div>
 
         <button id="termsReserveAgreeBtn" class="mt-4 w-full bg-pop-green text-white font-bold py-4 rounded-xl shadow-lg text-lg hover:translate-y-1 hover:shadow-none transition" disabled>

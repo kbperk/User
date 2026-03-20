@@ -62,11 +62,10 @@ function getDeviceId_(){
 
 document.addEventListener('DOMContentLoaded', async () => {
     try {
-        // ▼ 修正：ご指定の並び順になるよう、トップ画面（authSection）にテキストを動的に挿入します
         const authDesc = document.querySelector('#authSection p.text-gray-500');
         if (authDesc && !document.getElementById('memberOnlyNoticeAuth')) {
             authDesc.classList.remove('mb-8');
-            authDesc.classList.add('mb-2'); // 既存の余白を調整
+            authDesc.classList.add('mb-2'); 
             const notice = document.createElement('p');
             notice.id = 'memberOnlyNoticeAuth';
             notice.className = 'text-pop-pink font-bold text-sm mb-8';
@@ -82,7 +81,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         if(prevBtn) prevBtn.addEventListener('click', () => changeMonth(-1));
         if(nextBtn) nextBtn.addEventListener('click', () => changeMonth(1));
 
-        // ▼ QRボタンの動作を確実にするための強力なフック
         document.querySelectorAll('button').forEach(btn => {
             const oc = btn.getAttribute('onclick');
             if (oc && (oc.includes("qrModal") || oc.includes("showQrModal"))) {
@@ -458,6 +456,7 @@ function updateReserveAmountDisplay_(){
     }
 }
 
+// ★ 代替案B：規約モーダル内で2つのチェックボックスを制御する処理
 function openTermsBeforeReserve_(){
     TERMS_AGREED_THIS_TIME = false;
     const modal = document.getElementById('termsReserveModal');
@@ -472,12 +471,21 @@ function openTermsBeforeReserve_(){
     const sc = document.getElementById('termsReserveScroll');
     const chk = document.getElementById('termsReserveCheck');
     const lbl = document.getElementById('termsReserveLabel');
+    const chkCancel = document.getElementById('cancelPolicyCheck');
+    const lblCancel = document.getElementById('cancelPolicyLabel');
     const btn = document.getElementById('termsReserveAgreeBtn');
-    if(sc && chk && btn){
+
+    if(sc && chk && btn && chkCancel){
         chk.checked = false;
         chk.disabled = true;
         chk.style.pointerEvents = 'none';
         if(lbl){ lbl.classList.remove('text-gray-900'); lbl.classList.add('text-gray-400'); lbl.style.pointerEvents = 'none'; }
+
+        chkCancel.checked = false;
+        chkCancel.disabled = true;
+        chkCancel.style.pointerEvents = 'none';
+        if(lblCancel){ lblCancel.classList.remove('text-gray-900'); lblCancel.classList.add('text-gray-400'); lblCancel.style.pointerEvents = 'none'; }
+
         btn.disabled = true;
 
         sc.scrollTop = 0;
@@ -492,6 +500,12 @@ function openTermsBeforeReserve_(){
                     lbl.classList.remove('text-gray-400'); lbl.classList.add('text-gray-900');
                     lbl.style.pointerEvents = 'auto';
                 }
+                chkCancel.disabled = false;
+                chkCancel.style.pointerEvents = 'auto';
+                if(lblCancel){
+                    lblCancel.classList.remove('text-gray-400'); lblCancel.classList.add('text-gray-900');
+                    lblCancel.style.pointerEvents = 'auto';
+                }
             } else {
                 chk.checked = false;
                 chk.disabled = true;
@@ -499,6 +513,13 @@ function openTermsBeforeReserve_(){
                 if(lbl){
                     lbl.classList.remove('text-gray-900'); lbl.classList.add('text-gray-400');
                     lbl.style.pointerEvents = 'none';
+                }
+                chkCancel.checked = false;
+                chkCancel.disabled = true;
+                chkCancel.style.pointerEvents = 'none';
+                if(lblCancel){
+                    lblCancel.classList.remove('text-gray-900'); lblCancel.classList.add('text-gray-400');
+                    lblCancel.style.pointerEvents = 'none';
                 }
                 btn.disabled = true;
             }
@@ -511,9 +532,13 @@ function openTermsBeforeReserve_(){
 
         updateGate();
 
-        chk.onchange = () => {
-            btn.disabled = (!chk.checked || chk.disabled);
+        const checkState = () => {
+            btn.disabled = (!chk.checked || !chkCancel.checked || chk.disabled || chkCancel.disabled);
         };
+
+        chk.onchange = checkState;
+        chkCancel.onchange = checkState;
+
         btn.onclick = () => {
             TERMS_AGREED_THIS_TIME = true;
             closeModal('termsReserveModal');
@@ -730,13 +755,11 @@ function updateHeaderUI() {
     }
 }
 
-// ▼ グローバル関数として確実にQRコードを生成・表示する
 window.showQrModal = function() {
     if (!STATE.user) return;
     const safeId = encodeURIComponent(STATE.user.member_id);
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${safeId}`;
     
-    // HTMLの構造に関わらず、確実にQR画像を探し出して書き換える
     let imgEl = document.getElementById('qrImage');
     if (!imgEl) {
         const modal = document.getElementById('qrModal');
