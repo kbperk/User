@@ -81,17 +81,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         if(prevBtn) prevBtn.addEventListener('click', () => changeMonth(-1));
         if(nextBtn) nextBtn.addEventListener('click', () => changeMonth(1));
 
-        document.querySelectorAll('button').forEach(btn => {
-            const oc = btn.getAttribute('onclick');
-            if (oc && (oc.includes("qrModal") || oc.includes("showQrModal"))) {
-                btn.removeAttribute('onclick');
-                btn.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    showQrModal();
-                });
-            }
-        });
-
         const headCountSelect = document.querySelector('#reserveForm select[name="head_count"]');
         if (headCountSelect) {
             headCountSelect.addEventListener('change', updateReserveAmountDisplay_);
@@ -758,7 +747,7 @@ function updateHeaderUI() {
 window.showQrModal = function() {
     if (!STATE.user) return;
     const safeId = encodeURIComponent(STATE.user.member_id);
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${safeId}`;
+    const qrUrl = `https://quickchart.io/qr?size=200&text=${safeId}`;
     
     let imgEl = document.getElementById('qrImage');
     if (!imgEl) {
@@ -780,7 +769,7 @@ window.showQrModal = function() {
 function updateQrImage() {
     if (!STATE.user || !STATE.user.member_id) return;
     const safeId = encodeURIComponent(STATE.user.member_id);
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${safeId}`;
+    const qrUrl = `https://quickchart.io/qr?size=200&text=${safeId}`;
     let imgEl = document.getElementById('qrImage');
     if (!imgEl) {
         const modal = document.getElementById('qrModal');
