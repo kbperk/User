@@ -832,6 +832,10 @@ document.getElementById('reserveForm').addEventListener('submit', async (e) => {
         };
 
         const reserveRes = await callApi('reserve', params);
+        
+        // ★ 追加：通信完了後、アラートを出す前に手動で出したローダーを消す
+        showLoader(false);
+
         closeModal('reserveModal');
 
         await showAlert('予約完了', 'ご予約が完了いたしました！\nOKを押すと最新の予約状況に更新します。');
@@ -839,9 +843,10 @@ document.getElementById('reserveForm').addEventListener('submit', async (e) => {
         showLoader(true);
         window.location.reload();
     } catch (e) {
+        // ★ 追加：エラー時も手動で出したローダーを消す
+        showLoader(false);
         showMessageModal('error', e.message || String(e));
     } finally {
-        showLoader(false); // 手動で出したローダーを消す
         btn.disabled = false;
         btn.textContent = '予約へ進む';
     }
