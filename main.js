@@ -3,10 +3,11 @@
  * - QRコード生成ロジックを強化・確実化
  * - 予約ボタン前に「会員のみ」表記を追加
  * - 3ファイル分割バックエンド対応
+ * - ★ 新規: PWAインストール対応 ＆ 2軸ポイント反映
  */
 
 // ★ GASのウェブアプリURL
-console.log('[KB] main.js loaded: QR Fix & Member Only Notice Added');
+console.log('[KB] main.js loaded: QR Fix & Member Only Notice Added & PWA');
 
 const API_URL = 'https://script.google.com/macros/s/AKfycbwkkj4vp6v9gfjLZIxsLN-1aaUjyQebngxfTuMDPz62x_xg4dCadey920wmL3IYtS82kA/exec';
 
@@ -20,6 +21,43 @@ const STATE = {
     selectedSlot: null,
     selectedSlotWaitlist: false
 };
+
+// ★ 新規: PWA インストール関連
+let pwaPrompt = null;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    pwaPrompt = e;
+    updateInstallBanner();
+});
+
+window.addEventListener('appinstalled', () => {
+    pwaPrompt = null;
+    updateInstallBanner();
+    // GASに報告
+    if (STATE.user && STATE.user.member_id) {
+        callApi('user_app_installed', { member_id: STATE.user.member_id }).catch(e => console.log(e));
+    } else {
+        localStorage.setItem('pending_install_report', '1');
+    }
+});
+
+function updateInstallBanner() {
+    const banner = document.getElementById('pwaInstallBanner');
+    if (!banner) return;
+    
+    // キルスイッチ確認（デフォルトは表示、明示的にfalseの場合は隠す）
+    let isPublic = true;
+    if (STATE.settings && typeof STATE.settings.app_public !== 'undefined') {
+        isPublic = String(STATE.settings.app_public) !== 'false';
+    }
+    
+    if (pwaPrompt && isPublic) {
+        banner.classList.remove('hidden');
+    } else {
+        banner.classList.add('hidden');
+    }
+}
 
 // ローディング制御
 const LOADER_STATE = {
@@ -86,6 +124,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             headCountSelect.addEventListener('change', updateReserveAmountDisplay_);
         }
 
+        // ★ 新規: PWAバナークリックイベント
+        document.getElementById('pwaInstallBanner')?.addEventListener('click', async () => {
+            if (!pwaPrompt) return;
+            pwaPrompt.prompt();
+            const { outcome } = await pwaPrompt.userChoice;
+            if (outcome === 'accepted') {
+                pwaPrompt = null;
+                updateInstallBanner();
+            }
+        });
+
         const tasks = [initAppData()];
         if (STATE.user) {
             tasks.push(loadMyReservations());
@@ -124,6 +173,7 @@ async function initAppData() {
             STATE.slots = res.slots;
             STATE.settings = res.settings;
             renderCalendar(STATE.slots);
+            updateInstallBanner(); // ★ 追加
         }
     } catch (e) {
         console.error(e);
@@ -161,6 +211,15 @@ async function loadMyReservations() {
     if (!STATE.user) return;
     try {
         const res = await callApi('my_reservations', { member_id: STATE.user.member_id });
+        
+        // ★ 追加：ポイントと来店回数の最新情報を反映
+        if (res.member) {
+            STATE.user.current_point = res.member.current_point || 0;
+            STATE.user.total_visit = res.member.total_visit || 0;
+            updatePointUI();
+            localStorage.setItem('kb_user_v3', JSON.stringify(STATE.user));
+        }
+
         renderMyReservations(res.reservations || []);
     } catch (e) {
         console.error(e);
@@ -445,7 +504,6 @@ function updateReserveAmountDisplay_(){
     }
 }
 
-// ★ 代替案B：規約モーダル内で2つのチェックボックスを制御し、見た目（クラス）を確実に入れ替える処理
 function openTermsBeforeReserve_(){
     TERMS_AGREED_THIS_TIME = false;
     const modal = document.getElementById('termsReserveModal');
@@ -466,15 +524,12 @@ function openTermsBeforeReserve_(){
 
     if(sc && chk && btn && chkCancel){
         
-        // ▼ 追加：ボタンのクラスをJSで制御し、緑とグレーを確実に切り替える
         const checkState = () => {
             const isReady = (chk.checked && chkCancel.checked && !chk.disabled && !chkCancel.disabled);
             btn.disabled = !isReady;
             if (isReady) {
-                // 両方チェックされたら緑色にする
                 btn.className = "mt-4 w-full bg-pop-green text-white font-bold py-4 rounded-xl shadow-lg text-lg hover:translate-y-1 hover:shadow-none transition";
             } else {
-                // 条件を満たしていない場合は完全にグレーアウトする
                 btn.className = "mt-4 w-full bg-gray-300 text-gray-500 font-bold py-4 rounded-xl text-lg transition cursor-not-allowed";
             }
         };
@@ -510,7 +565,6 @@ function openTermsBeforeReserve_(){
                     lblCancel.style.pointerEvents = 'none';
                 }
             }
-            // スクロール等の状態が変わった時も、ボタンの色を正しく合わせる
             checkState();
         };
 
@@ -522,7 +576,6 @@ function openTermsBeforeReserve_(){
             updateGate();
         };
 
-        // 初回表示時にもボタンをグレーにするために呼び出す
         updateGate();
 
         chk.onchange = checkState;
@@ -562,6 +615,13 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
     try {
         const user = await callApi('login', params);
         saveUserSession(user);
+
+        // ★ 修正：ログイン成功時にも保留中のインストール報告を実行
+        if(localStorage.getItem('pending_install_report') === '1'){
+            callApi('user_app_installed', { member_id: user.member_id }).catch(e=>console.log(e));
+            localStorage.removeItem('pending_install_report');
+        }
+
         closeModal('loginModal');
         showMessageModal('info', `おかえりなさい、${user.name} さん！`, 'ログイン成功');
         form.reset();
@@ -687,8 +747,21 @@ document.getElementById('registerForm').addEventListener('submit', async (e) => 
 
     try {
         const res = await callApi('register', params);
-        const user = { member_id: res.member_id, name: res.name, token: 'new_session' };
+        const user = { 
+            member_id: res.member_id, 
+            name: res.name, 
+            token: 'new_session',
+            current_point: 0,
+            total_visit: 0
+        };
         saveUserSession(user);
+
+        // ★ 修正：新規登録直後にも保留中のインストール報告を実行（計測漏れ防止）
+        if(localStorage.getItem('pending_install_report') === '1'){
+            callApi('user_app_installed', { member_id: res.member_id }).catch(e=>console.log(e));
+            localStorage.removeItem('pending_install_report');
+        }
+
         closeModal('registerModal');
         showMessageModal('info', `ようこそ！\nあなたの会員IDは【 ${res.member_id} 】です。\n忘れないようにメモしてください。`, '登録完了！');
         showQrModal();
@@ -709,14 +782,27 @@ function saveUserSession(user) {
     localStorage.setItem('kb_user_v3', JSON.stringify(user));
     try{ loadMyReservations(); }catch(_){}
     updateHeaderUI();
+    updatePointUI(); // ★ 追加
 }
 function loadUserSession() {
     const json = localStorage.getItem('kb_user_v3');
     if (json) {
         STATE.user = JSON.parse(json);
         updateHeaderUI();
+        updatePointUI(); // ★ 追加
     }
 }
+
+// ★ 追加: ポイント表示の更新ロジック
+function updatePointUI() {
+    const ptEl = document.getElementById('myPagePoint');
+    const tvEl = document.getElementById('myPageTotalVisit');
+    if (STATE.user) {
+        if (ptEl) ptEl.textContent = STATE.user.current_point || '0';
+        if (tvEl) tvEl.textContent = STATE.user.total_visit || '0';
+    }
+}
+
 function updateHeaderUI() {
     const isLogged = !!STATE.user;
     const headerArea = document.getElementById('headerUserArea');
@@ -807,12 +893,10 @@ document.getElementById('reserveForm').addEventListener('submit', async (e) => {
     const form = e.target;
     const btn = form.querySelector('button');
 
-    // ★ 爆速化：計算の前にUIを即座に変更してローディングを出す
     btn.disabled = true;
     btn.textContent = '予約しています...';
     showLoader(true);
 
-    // 画面の描画更新をブラウザに強制させる魔法の待機
     await new Promise(resolve => setTimeout(resolve, 10));
 
     try {
@@ -833,17 +917,17 @@ document.getElementById('reserveForm').addEventListener('submit', async (e) => {
 
         const reserveRes = await callApi('reserve', params);
         
-        // ★ 追加：通信完了後、アラートを出す前に手動で出したローダーを消す
         showLoader(false);
-
         closeModal('reserveModal');
 
-        await showAlert('予約完了', 'ご予約が完了いたしました！\nOKを押すと最新の予約状況に更新します。');
+        sessionStorage.setItem('kb_flash_after_reload', JSON.stringify({
+            type: 'info',
+            text: 'ご予約が完了いたしました！\nOKを押すと最新の状況を読み込みます。'
+        }));
 
         showLoader(true);
         window.location.reload();
     } catch (e) {
-        // ★ 追加：エラー時も手動で出したローダーを消す
         showLoader(false);
         showMessageModal('error', e.message || String(e));
     } finally {
@@ -932,6 +1016,7 @@ function showAlert(title, body) {
     });
 }
 
+// ★ 復元：旧コードの関数（querySelectorAll版）を完全維持
 function showConfirm(title, body) {
     return new Promise(resolve => {
         const modal = document.getElementById('confirmModal');
@@ -956,11 +1041,13 @@ function showConfirm(title, body) {
     });
 }
 
+// ★ 復元：旧コードの関数を完全維持
 function showMessageModal(type, message, title){
     const t = title || (type==='error' ? '失敗' : (type==='warn' ? '注意' : 'お知らせ'));
     const color = (type==='error') ? 'red' : (type==='warn' ? 'yellow' : 'blue');
     showMessage(t, String(message||''), color);
 }
+
 function confirmModal(message, yesText, noText){
     return showConfirm('確認', String(message||''));
 }

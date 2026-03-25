@@ -105,6 +105,16 @@
 
     <main class="relative z-10 pt-24 pb-20 container mx-auto px-4 max-w-3xl">
 
+        <div id="pwaInstallBanner" class="hidden bg-gradient-to-r from-pop-green to-pop-cyan text-white p-4 rounded-2xl shadow-lg mb-6 flex items-center justify-between cursor-pointer active:scale-95 transition-transform">
+            <div>
+                <h3 class="font-black text-lg">📱 公式アプリを入れる</h3>
+                <p class="text-xs font-bold opacity-90 mt-1">ワンタップで予約！ポイントも貯まる！</p>
+            </div>
+            <div class="bg-white text-pop-green font-black text-sm px-4 py-2 rounded-xl shadow-sm whitespace-nowrap">
+                追加
+            </div>
+        </div>
+
         <section id="authSection" class="bg-white rounded-3xl shadow-xl border-4 border-pop-green/30 p-8 text-center mb-12 transform transition-all hover:scale-[1.01]">
             <div class="mb-6"><span class="text-6xl">🔐</span></div>
             <h3 class="text-2xl font-bold mb-2">予約へ進む</h3>
@@ -167,8 +177,22 @@
 
         <section id="myReservationsSection" class="hidden bg-white rounded-3xl shadow-xl border-4 border-pop-green/20 p-6 mb-12">
             <div class="flex items-center justify-between mb-4">
-                <h3 class="text-xl font-bold flex items-center gap-2"><span>📌</span> マイ予約</h3>
+                <h3 class="text-xl font-bold flex items-center gap-2"><span>📌</span> マイページ</h3>
             </div>
+
+            <div class="bg-gray-50 rounded-2xl p-4 mb-6 border-2 border-gray-100">
+                <div class="flex gap-3">
+                    <div class="flex-1 bg-white border-2 border-pop-green/30 rounded-xl p-3 text-center shadow-sm">
+                        <p class="text-[10px] text-pop-green font-black mb-1">割引に使える</p>
+                        <p class="text-2xl font-black text-pop-text font-english"><span id="myPagePoint">0</span><span class="text-sm ml-1 text-gray-500">pt</span></p>
+                    </div>
+                    <div class="flex-1 bg-white border-2 border-blue-200/50 rounded-xl p-3 text-center shadow-sm">
+                        <p class="text-[10px] text-blue-500 font-black mb-1">累計来店回数</p>
+                        <p class="text-2xl font-black text-pop-text font-english"><span id="myPageTotalVisit">0</span><span class="text-sm ml-1 text-gray-500">回</span></p>
+                    </div>
+                </div>
+            </div>
+
             <div id="myReservationsEmpty" class="text-sm text-gray-500 hidden">予約はありません。</div>
             <div id="myReservations" class="grid gap-3"></div>
         </section>
