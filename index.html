@@ -22,7 +22,24 @@
             await OneSignal.init({
                 appId: "fe175548-472e-490e-85ff-ea2bf485fc10",
                 serviceWorkerParam: { scope: "/" },
-                serviceWorkerPath: "sw.js"
+                serviceWorkerPath: "sw.js",
+                promptOptions: {
+                    slidedown: {
+                        prompts: [{
+                            type: "push",
+                            autoPrompt: true,
+                            text: {
+                                actionMessage: "最新の予約状況やお得なクーポン情報を通知でお知らせします。通知を受け取りますか？",
+                                acceptButton: "許可する",
+                                cancelButton: "あとで"
+                            },
+                            delay: {
+                                pageViews: 1,
+                                timeDelay: 1
+                            }
+                        }]
+                    }
+                }
             });
         });
     </script>
