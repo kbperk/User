@@ -841,6 +841,13 @@ function saveUserSession(user) {
     try{ loadMyReservations(); }catch(_){}
     updateHeaderUI();
     updatePointUI();
+    
+    // ★追加: OneSignalに会員IDを連携し、個別通知を可能にする
+    if (window.OneSignalDeferred) {
+        window.OneSignalDeferred.push(async function(OneSignal) {
+            await OneSignal.login(user.member_id);
+        });
+    }
 }
 
 function loadUserSession() {
@@ -939,6 +946,14 @@ document.getElementById('headerLogoutBtn').onclick = async () => {
         localStorage.removeItem('kb_user_v3');
         STATE.user = null;
         updateHeaderUI();
+        
+        // ★追加: OneSignalからもログアウト
+        if (window.OneSignalDeferred) {
+            window.OneSignalDeferred.push(async function(OneSignal) {
+                await OneSignal.logout();
+            });
+        }
+        
         window.location.reload();
     }
 };
