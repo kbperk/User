@@ -2,12 +2,12 @@
  * KB PARK ユーザー画面ロジック
  * - QRコード生成ロジック強化・確実化
  * - 3ファイル分割バックエンド対応
- * - ★ 新規: PWAインストール対応 ＆ 2軸ポイント反映 ＆ SW登録
+ * - PWAインストール対応 ＆ 2軸ポイント反映 ＆ SW登録
+ * - ★ 新規: アプリとWebの完全分離ロジック搭載
  */
 
-console.log('[KB] main.js loaded: PWA & Point Display Added');
+console.log('[KB] main.js loaded: Strict App Mode Separation Added');
 
-// ★ 追記: Service Workerの登録処理 (PWA必須)
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js').then(reg => {
@@ -32,36 +32,45 @@ const STATE = {
 };
 
 // ==========================================
-// ★ PWA インストール＆起動検知ロジック（iOS・Android両対応）
+// ★ 厳密なアプリ起動判定ロジック
+// ==========================================
+function isAppMode() {
+    // 1. Android等: manifest.jsonで指定した ?mode=app が付いているか
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('mode') === 'app') return true;
+    
+    // 2. iOS: フルスクリーンモードで起動しているか
+    if (window.navigator.standalone === true) return true;
+    
+    // ※OSに強制的に枠だけアプリ化されても、パラメータが無ければWeb版として扱う
+    return false;
+}
+
+// ==========================================
+// PWA インストール＆起動検知ロジック
 // ==========================================
 let pwaPrompt = null;
 
-// Android/Chrome等でインストール条件を満たした場合
 window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     pwaPrompt = e;
     updateInstallBanner();
 });
 
-// インストールが完了した瞬間（Android等）
 window.addEventListener('appinstalled', () => {
     pwaPrompt = null;
     reportInstallToServer_();
     updateInstallBanner();
 });
 
-// アプリ（スタンドアロン）として起動しているか検知してGASに報告する（iOS Safariの手動追加対策）
 function checkStandaloneAndReport_() {
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
-    if (isStandalone) {
+    if (isAppMode()) {
         reportInstallToServer_();
     }
 }
 
-// ★ 追加: アプリとして起動している時は「TOPへ戻る」「ログアウト」を非表示にする
 function applyStandaloneUI() {
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
-    if (isStandalone) {
+    if (isAppMode()) {
         const topBtn1 = document.getElementById('headerTopBtn');
         const topBtn2 = document.getElementById('loginModalTopContainer');
         const logoutBtn = document.getElementById('headerLogoutBtn');
@@ -72,7 +81,6 @@ function applyStandaloneUI() {
     }
 }
 
-// サーバーへ「DL済」を報告する処理
 function reportInstallToServer_() {
     if (localStorage.getItem('kb_app_installed_reported') === '1') return;
 
@@ -91,9 +99,7 @@ function updateInstallBanner() {
     const banner = document.getElementById('pwaInstallBanner');
     if (!banner) return;
     
-    // ホーム画面のアプリから起動している場合は、バナーを完全に隠す
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
-    if (isStandalone) {
+    if (isAppMode()) {
         banner.classList.add('hidden');
         return;
     }
@@ -110,13 +116,14 @@ function updateInstallBanner() {
     }
 }
 
-// ローディング制御
+// ==========================================
+// ローディング制御＆初期化
+// ==========================================
 const LOADER_STATE = {
     count: 0,
     usePanda: false
 };
 
-// 初回表示で「裏方が一瞬見える」問題を抑止
 (function(){
     try{
         document.documentElement.classList.add('kb-booting');
@@ -145,10 +152,6 @@ function getDeviceId_(){
     }
 }
 
-// ==========================================
-// 1. 初期化 & API通信
-// ==========================================
-
 document.addEventListener('DOMContentLoaded', async () => {
     try {
         const authDesc = document.querySelector('#authSection p.text-gray-500');
@@ -164,8 +167,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         showLoader(true);
         loadUserSession();
-        checkStandaloneAndReport_(); // 起動時にアプリモードかチェック
-        applyStandaloneUI();         // ★追加: アプリ起動時は不要ボタンを隠す
+        checkStandaloneAndReport_(); 
+        applyStandaloneUI();         
         
         const prevBtn = document.getElementById('prevMonthBtn');
         const nextBtn = document.getElementById('nextMonthBtn');
@@ -342,9 +345,6 @@ function renderMyReservations(items) {
     });
 }
 
-// ==========================================
-// 2A. 時刻系ユーティリティ
-// ==========================================
 function nowTokyo_(){
     return new Date();
 }
@@ -371,10 +371,6 @@ function isPastSlotByCutoff_(dateStr, timeStr){
     if(!st) return false;
     return st < cutoff;
 }
-
-// ==========================================
-// 2. カレンダー & 予約枠描画
-// ==========================================
 
 function renderCalendar(slots) {
     const grid = document.getElementById('calendarDays');
@@ -846,6 +842,7 @@ function saveUserSession(user) {
     updateHeaderUI();
     updatePointUI();
 }
+
 function loadUserSession() {
     const json = localStorage.getItem('kb_user_v3');
     if (json) {
@@ -855,7 +852,7 @@ function loadUserSession() {
     }
 }
 
-// ★ 修正：PWAの時のみポイントを表示し、Web版は非表示にする
+// ★ アプリ版のみポイントを表示する制御
 function updatePointUI() {
     const ptEl = document.getElementById('myPagePoint');
     const ptCard = document.getElementById('myPagePointCard');
@@ -864,8 +861,7 @@ function updatePointUI() {
         if (ptEl) ptEl.textContent = STATE.user.current_point || '0';
         
         if (ptCard) {
-            const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
-            if (isStandalone) {
+            if (isAppMode()) {
                 ptCard.classList.remove('hidden');
             } else {
                 ptCard.classList.add('hidden');
@@ -1011,14 +1007,12 @@ document.getElementById('reserveForm').addEventListener('submit', async (e) => {
 // 6. マイページ機能
 // ==========================================
 
-// ★ 追加（隠れバグ修正）: マイページを開いた時にIDと名前の表示がエラーにならないよう保護
 async function showMyPage() {
     if (!STATE.user) {
         switchSection('loginSection');
         return;
     }
     
-    // 初期表示（前回キャッシュ等）
     const unEl = document.getElementById('myPageUserName');
     if (unEl) unEl.textContent = STATE.user.name;
     const miEl = document.getElementById('myPageMemberId');
