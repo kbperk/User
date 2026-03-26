@@ -1,13 +1,22 @@
 /**
  * KB PARK ユーザー画面ロジック
- * - QRコード生成ロジックを強化・確実化
- * - 予約ボタン前に「会員のみ」表記を追加
+ * - QRコード生成ロジック強化・確実化
  * - 3ファイル分割バックエンド対応
- * - ★ 新規: PWAインストール対応 ＆ 2軸ポイント反映
+ * - ★ 新規: PWAインストール対応 ＆ 2軸ポイント反映 ＆ SW登録
  */
 
-// ★ GASのウェブアプリURL
-console.log('[KB] main.js loaded: QR Fix & Member Only Notice Added & PWA');
+console.log('[KB] main.js loaded: PWA & Point Display Added');
+
+// ★ 追記: Service Workerの登録処理 (PWA必須)
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').then(reg => {
+      console.log('SW registered:', reg);
+    }).catch(err => {
+      console.log('SW registration failed:', err);
+    });
+  });
+}
 
 const API_URL = 'https://script.google.com/macros/s/AKfycbwkkj4vp6v9gfjLZIxsLN-1aaUjyQebngxfTuMDPz62x_xg4dCadey920wmL3IYtS82kA/exec';
 
@@ -22,37 +31,69 @@ const STATE = {
     selectedSlotWaitlist: false
 };
 
-// ★ 新規: PWA インストール関連
+// ==========================================
+// ★ PWA インストール＆起動検知ロジック（iOS・Android両対応）
+// ==========================================
 let pwaPrompt = null;
 
+// Android/Chrome等でインストール条件を満たした場合
 window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     pwaPrompt = e;
     updateInstallBanner();
 });
 
+// インストールが完了した瞬間（Android等）
 window.addEventListener('appinstalled', () => {
     pwaPrompt = null;
+    reportInstallToServer_();
     updateInstallBanner();
-    // GASに報告
+});
+
+// アプリ（スタンドアロン）として起動しているか検知してGASに報告する（iOS Safariの手動追加対策）
+function checkStandaloneAndReport_() {
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    if (isStandalone) {
+        reportInstallToServer_();
+    }
+}
+
+// サーバーへ「DL済」を報告する処理
+function reportInstallToServer_() {
+    // すでに報告済みならスキップ
+    if (localStorage.getItem('kb_app_installed_reported') === '1') return;
+
     if (STATE.user && STATE.user.member_id) {
-        callApi('user_app_installed', { member_id: STATE.user.member_id }).catch(e => console.log(e));
+        callApi('user_app_installed', { member_id: STATE.user.member_id })
+            .then(() => {
+                localStorage.setItem('kb_app_installed_reported', '1');
+            })
+            .catch(e => console.log('Install report failed:', e));
     } else {
+        // 未ログインなら保留フラグだけ立てておき、ログイン/登録直後に送信する
         localStorage.setItem('pending_install_report', '1');
     }
-});
+}
 
 function updateInstallBanner() {
     const banner = document.getElementById('pwaInstallBanner');
     if (!banner) return;
     
-    // キルスイッチ確認（デフォルトは表示、明示的にfalseの場合は隠す）
+    // ホーム画面のアプリから起動している場合は、バナーを完全に隠す
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    if (isStandalone) {
+        banner.classList.add('hidden');
+        return;
+    }
+    
+    // キルスイッチ確認（設定がない場合やONの場合はtrue）
     let isPublic = true;
     if (STATE.settings && typeof STATE.settings.app_public !== 'undefined') {
         isPublic = String(STATE.settings.app_public) !== 'false';
     }
     
-    if (pwaPrompt && isPublic) {
+    // Webブラウザで開いていて、かつ公開中なら「全端末で強制的に」バナーを出す
+    if (isPublic) {
         banner.classList.remove('hidden');
     } else {
         banner.classList.add('hidden');
@@ -113,6 +154,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         showLoader(true);
         loadUserSession();
+        checkStandaloneAndReport_(); // ★起動時にアプリモードかチェック
         
         const prevBtn = document.getElementById('prevMonthBtn');
         const nextBtn = document.getElementById('nextMonthBtn');
@@ -124,14 +166,23 @@ document.addEventListener('DOMContentLoaded', async () => {
             headCountSelect.addEventListener('change', updateReserveAmountDisplay_);
         }
 
-        // ★ 新規: PWAバナークリックイベント
+        // ★ PWAバナークリックイベント（全端末対応の最強ロジック）
         document.getElementById('pwaInstallBanner')?.addEventListener('click', async () => {
-            if (!pwaPrompt) return;
-            pwaPrompt.prompt();
-            const { outcome } = await pwaPrompt.userChoice;
-            if (outcome === 'accepted') {
-                pwaPrompt = null;
-                updateInstallBanner();
+            if (pwaPrompt) {
+                // Android等、自動インストール機能が使える場合
+                pwaPrompt.prompt();
+                const { outcome } = await pwaPrompt.userChoice;
+                if (outcome === 'accepted') {
+                    pwaPrompt = null;
+                    updateInstallBanner();
+                }
+            } else {
+                // iPhone等、自動機能が使えない場合は手動の手順をポップアップで教える
+                showMessageModal(
+                    'info', 
+                    '【iPhoneをご利用の方】\n画面下部の「共有ボタン（四角から↑が飛び出ているマーク）」をタップし、「ホーム画面に追加」を選んでください。\n\n【Androidの方】\nブラウザ右上のメニュー（︙）から「ホーム画面に追加」を選んでください。', 
+                    'アプリの入れ方'
+                );
             }
         });
 
@@ -173,7 +224,7 @@ async function initAppData() {
             STATE.slots = res.slots;
             STATE.settings = res.settings;
             renderCalendar(STATE.slots);
-            updateInstallBanner(); // ★ 追加
+            updateInstallBanner(); 
         }
     } catch (e) {
         console.error(e);
@@ -212,7 +263,6 @@ async function loadMyReservations() {
     try {
         const res = await callApi('my_reservations', { member_id: STATE.user.member_id });
         
-        // ★ 追加：ポイントと来店回数の最新情報を反映
         if (res.member) {
             STATE.user.current_point = res.member.current_point || 0;
             STATE.user.total_visit = res.member.total_visit || 0;
@@ -616,10 +666,13 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
         const user = await callApi('login', params);
         saveUserSession(user);
 
-        // ★ 修正：ログイン成功時にも保留中のインストール報告を実行
+        // ★ 保留中のDL報告を送信（DL漏れ防止）
         if(localStorage.getItem('pending_install_report') === '1'){
-            callApi('user_app_installed', { member_id: user.member_id }).catch(e=>console.log(e));
-            localStorage.removeItem('pending_install_report');
+            callApi('user_app_installed', { member_id: user.member_id })
+                .then(() => {
+                    localStorage.removeItem('pending_install_report');
+                    localStorage.setItem('kb_app_installed_reported', '1');
+                }).catch(e=>console.log(e));
         }
 
         closeModal('loginModal');
@@ -756,10 +809,13 @@ document.getElementById('registerForm').addEventListener('submit', async (e) => 
         };
         saveUserSession(user);
 
-        // ★ 修正：新規登録直後にも保留中のインストール報告を実行（計測漏れ防止）
+        // ★ 新規登録直後にも保留中のDL報告を送信（DL漏れ防止）
         if(localStorage.getItem('pending_install_report') === '1'){
-            callApi('user_app_installed', { member_id: res.member_id }).catch(e=>console.log(e));
-            localStorage.removeItem('pending_install_report');
+            callApi('user_app_installed', { member_id: res.member_id })
+                .then(() => {
+                    localStorage.removeItem('pending_install_report');
+                    localStorage.setItem('kb_app_installed_reported', '1');
+                }).catch(e=>console.log(e));
         }
 
         closeModal('registerModal');
@@ -782,18 +838,18 @@ function saveUserSession(user) {
     localStorage.setItem('kb_user_v3', JSON.stringify(user));
     try{ loadMyReservations(); }catch(_){}
     updateHeaderUI();
-    updatePointUI(); // ★ 追加
+    updatePointUI();
 }
 function loadUserSession() {
     const json = localStorage.getItem('kb_user_v3');
     if (json) {
         STATE.user = JSON.parse(json);
         updateHeaderUI();
-        updatePointUI(); // ★ 追加
+        updatePointUI();
     }
 }
 
-// ★ 追加: ポイント表示の更新ロジック
+// ポイント表示の更新ロジック
 function updatePointUI() {
     const ptEl = document.getElementById('myPagePoint');
     const tvEl = document.getElementById('myPageTotalVisit');
@@ -1016,7 +1072,6 @@ function showAlert(title, body) {
     });
 }
 
-// ★ 復元：旧コードの関数（querySelectorAll版）を完全維持
 function showConfirm(title, body) {
     return new Promise(resolve => {
         const modal = document.getElementById('confirmModal');
@@ -1041,7 +1096,6 @@ function showConfirm(title, body) {
     });
 }
 
-// ★ 復元：旧コードの関数を完全維持
 function showMessageModal(type, message, title){
     const t = title || (type==='error' ? '失敗' : (type==='warn' ? '注意' : 'お知らせ'));
     const color = (type==='error') ? 'red' : (type==='warn' ? 'yellow' : 'blue');
