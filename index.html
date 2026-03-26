@@ -97,7 +97,7 @@
                 <img src="kb君万歳.png" alt="KB君" class="w-10 h-10 object-contain" /> KB PARK 予約システム
             </h1>
             <div class="flex items-center gap-2">
-                <a href="https://kbperk.github.io/main/" class="text-[10px] md:text-xs bg-pop-yellow text-black px-3 py-2 rounded-full font-bold shadow-sm hover:brightness-110 transition whitespace-nowrap">TOPへ戻る</a>
+                <a id="headerTopBtn" href="https://kbperk.github.io/main/" class="text-[10px] md:text-xs bg-pop-yellow text-black px-3 py-2 rounded-full font-bold shadow-sm hover:brightness-110 transition whitespace-nowrap">TOPへ戻る</a>
                 
                 <div id="headerUserArea" class="hidden flex items-center gap-3">
                     <span id="headerUserName" class="font-bold text-sm text-pop-green hidden md:inline">ゲスト様</span>
@@ -184,16 +184,10 @@
                 <h3 class="text-xl font-bold flex items-center gap-2"><span>📌</span> マイページ</h3>
             </div>
 
-            <div class="bg-gray-50 rounded-2xl p-4 mb-6 border-2 border-gray-100">
-                <div class="flex gap-3">
-                    <div class="flex-1 bg-white border-2 border-pop-green/30 rounded-xl p-3 text-center shadow-sm">
-                        <p class="text-[10px] text-pop-green font-black mb-1">割引に使える</p>
-                        <p class="text-2xl font-black text-pop-text font-english"><span id="myPagePoint">0</span><span class="text-sm ml-1 text-gray-500">pt</span></p>
-                    </div>
-                    <div class="flex-1 bg-white border-2 border-blue-200/50 rounded-xl p-3 text-center shadow-sm">
-                        <p class="text-[10px] text-blue-500 font-black mb-1">累計来店回数</p>
-                        <p class="text-2xl font-black text-pop-text font-english"><span id="myPageTotalVisit">0</span><span class="text-sm ml-1 text-gray-500">回</span></p>
-                    </div>
+            <div id="myPagePointCard" class="hidden bg-gray-50 rounded-2xl p-4 mb-6 border-2 border-gray-100">
+                <div class="bg-white border-2 border-pop-green/30 rounded-xl p-4 text-center shadow-sm">
+                    <p class="text-xs text-pop-green font-black mb-1">割引に使えるポイント</p>
+                    <p class="text-3xl font-black text-pop-text font-english"><span id="myPagePoint">0</span><span class="text-sm ml-1 text-gray-500">pt</span></p>
                 </div>
             </div>
 
@@ -227,7 +221,7 @@
                     <button type="button" onclick="closeModal('loginModal'); openModal('forgotIdModal');" class="text-sm font-bold text-pop-cyan underline hover:text-pop-pink transition">会員IDを忘れた方はこちら</button>
                 </div>
 
-                <div class="mt-6 text-center border-t-2 border-gray-100 pt-4">
+                <div id="loginModalTopContainer" class="mt-6 text-center border-t-2 border-gray-100 pt-4">
                     <a href="https://kbperk.github.io/main/" class="text-sm font-bold text-gray-400 hover:text-gray-600 transition">◀ TOPへ戻る</a>
                 </div>
             </form>

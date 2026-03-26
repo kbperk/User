@@ -58,9 +58,22 @@ function checkStandaloneAndReport_() {
     }
 }
 
+// ★ 追加: アプリとして起動している時は「TOPへ戻る」「ログアウト」を非表示にする
+function applyStandaloneUI() {
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    if (isStandalone) {
+        const topBtn1 = document.getElementById('headerTopBtn');
+        const topBtn2 = document.getElementById('loginModalTopContainer');
+        const logoutBtn = document.getElementById('headerLogoutBtn');
+        
+        if (topBtn1) topBtn1.style.display = 'none';
+        if (topBtn2) topBtn2.style.display = 'none';
+        if (logoutBtn) logoutBtn.style.display = 'none';
+    }
+}
+
 // サーバーへ「DL済」を報告する処理
 function reportInstallToServer_() {
-    // すでに報告済みならスキップ
     if (localStorage.getItem('kb_app_installed_reported') === '1') return;
 
     if (STATE.user && STATE.user.member_id) {
@@ -70,7 +83,6 @@ function reportInstallToServer_() {
             })
             .catch(e => console.log('Install report failed:', e));
     } else {
-        // 未ログインなら保留フラグだけ立てておき、ログイン/登録直後に送信する
         localStorage.setItem('pending_install_report', '1');
     }
 }
@@ -86,13 +98,11 @@ function updateInstallBanner() {
         return;
     }
     
-    // キルスイッチ確認（設定がない場合やONの場合はtrue）
     let isPublic = true;
     if (STATE.settings && typeof STATE.settings.app_public !== 'undefined') {
         isPublic = String(STATE.settings.app_public) !== 'false';
     }
     
-    // Webブラウザで開いていて、かつ公開中なら「全端末で強制的に」バナーを出す
     if (isPublic) {
         banner.classList.remove('hidden');
     } else {
@@ -154,7 +164,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         showLoader(true);
         loadUserSession();
-        checkStandaloneAndReport_(); // ★起動時にアプリモードかチェック
+        checkStandaloneAndReport_(); // 起動時にアプリモードかチェック
+        applyStandaloneUI();         // ★追加: アプリ起動時は不要ボタンを隠す
         
         const prevBtn = document.getElementById('prevMonthBtn');
         const nextBtn = document.getElementById('nextMonthBtn');
@@ -166,10 +177,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             headCountSelect.addEventListener('change', updateReserveAmountDisplay_);
         }
 
-        // ★ PWAバナークリックイベント（全端末対応の最強ロジック）
         document.getElementById('pwaInstallBanner')?.addEventListener('click', async () => {
             if (pwaPrompt) {
-                // Android等、自動インストール機能が使える場合
                 pwaPrompt.prompt();
                 const { outcome } = await pwaPrompt.userChoice;
                 if (outcome === 'accepted') {
@@ -177,7 +186,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                     updateInstallBanner();
                 }
             } else {
-                // iPhone等、自動機能が使えない場合は手動の手順をポップアップで教える
                 showMessageModal(
                     'info', 
                     '【iPhoneをご利用の方】\n画面下部の「共有ボタン（四角から↑が飛び出ているマーク）」をタップし、「ホーム画面に追加」を選んでください。\n\n【Androidの方】\nブラウザ右上のメニュー（︙）から「ホーム画面に追加」を選んでください。', 
@@ -666,7 +674,6 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
         const user = await callApi('login', params);
         saveUserSession(user);
 
-        // ★ 保留中のDL報告を送信（DL漏れ防止）
         if(localStorage.getItem('pending_install_report') === '1'){
             callApi('user_app_installed', { member_id: user.member_id })
                 .then(() => {
@@ -809,7 +816,6 @@ document.getElementById('registerForm').addEventListener('submit', async (e) => 
         };
         saveUserSession(user);
 
-        // ★ 新規登録直後にも保留中のDL報告を送信（DL漏れ防止）
         if(localStorage.getItem('pending_install_report') === '1'){
             callApi('user_app_installed', { member_id: res.member_id })
                 .then(() => {
@@ -849,13 +855,22 @@ function loadUserSession() {
     }
 }
 
-// ポイント表示の更新ロジック
+// ★ 修正：PWAの時のみポイントを表示し、Web版は非表示にする
 function updatePointUI() {
     const ptEl = document.getElementById('myPagePoint');
-    const tvEl = document.getElementById('myPageTotalVisit');
+    const ptCard = document.getElementById('myPagePointCard');
+    
     if (STATE.user) {
         if (ptEl) ptEl.textContent = STATE.user.current_point || '0';
-        if (tvEl) tvEl.textContent = STATE.user.total_visit || '0';
+        
+        if (ptCard) {
+            const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+            if (isStandalone) {
+                ptCard.classList.remove('hidden');
+            } else {
+                ptCard.classList.add('hidden');
+            }
+        }
     }
 }
 
@@ -993,7 +1008,28 @@ document.getElementById('reserveForm').addEventListener('submit', async (e) => {
 });
 
 // ==========================================
-// 6. UIユーティリティ
+// 6. マイページ機能
+// ==========================================
+
+// ★ 追加（隠れバグ修正）: マイページを開いた時にIDと名前の表示がエラーにならないよう保護
+async function showMyPage() {
+    if (!STATE.user) {
+        switchSection('loginSection');
+        return;
+    }
+    
+    // 初期表示（前回キャッシュ等）
+    const unEl = document.getElementById('myPageUserName');
+    if (unEl) unEl.textContent = STATE.user.name;
+    const miEl = document.getElementById('myPageMemberId');
+    if (miEl) miEl.textContent = STATE.user.member_id;
+    
+    switchSection('myPageSection');
+    fetchMyReservations();
+}
+
+// ==========================================
+// 7. UIユーティリティ
 // ==========================================
 
 function showLoader(show){
