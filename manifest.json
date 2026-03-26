@@ -1,0 +1,21 @@
+{
+  "name": "KB PARK 予約アプリ",
+  "short_name": "KB PARK",
+  "description": "KB PARKの公式予約アプリです。ポイント機能付き！",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#F0FFF4",
+  "theme_color": "#32D74B",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
