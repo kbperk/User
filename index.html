@@ -19,29 +19,51 @@
     <script>
         window.OneSignalDeferred = window.OneSignalDeferred || [];
         OneSignalDeferred.push(async function(OneSignal) {
+            
+            // 1. 環境判定（アプリ版 PWA かどうか）
+            const isStandalone = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+            const isAppParam = new URLSearchParams(window.location.search).get('mode') === 'app';
+            const isAppMode = isStandalone || isAppParam;
+
+            // 2. 初期化（OneSignalの標準プロンプトは一切呼ばない）
             await OneSignal.init({
                 appId: "fe175548-472e-490e-85ff-ea2bf485fc10",
                 serviceWorkerParam: { scope: "/" },
-                serviceWorkerPath: "sw.js",
-                promptOptions: {
-                    slidedown: {
-                        prompts: [{
-                            type: "push",
-                            autoPrompt: true,
-                            text: {
-                                actionMessage: "最新の予約状況やお得なクーポン情報を通知でお知らせします。通知を受け取りますか？",
-                                acceptButton: "許可する",
-                                cancelButton: "あとで"
-                            },
-                            delay: {
-                                pageViews: 1,
-                                timeDelay: 1
-                            }
-                        }]
-                    }
-                }
+                serviceWorkerPath: "sw.js"
             });
+
+            // 3. アプリ版 ＆ まだ回答していない場合のみ、自作の日本語モーダルを表示
+            if (isAppMode) {
+                const answered = localStorage.getItem('pushPromptAnswered');
+                if (!answered) {
+                    // 画面の描画完了を待ってからモーダルを表示
+                    setTimeout(() => {
+                        const modal = document.getElementById('pushPromptModal');
+                        if (modal) modal.classList.remove('hidden');
+                    }, 1000);
+                }
+            }
         });
+
+        // ==========================================
+        // ▼ カスタムモーダル用の制御関数 ▼
+        // ==========================================
+        async function acceptCustomPush() {
+            // 回答済みフラグを保存（二度と出さない）
+            localStorage.setItem('pushPromptAnswered', 'true');
+            document.getElementById('pushPromptModal').classList.add('hidden');
+            
+            // OneSignalのネイティブ通知リクエストを起動（OS標準の許可ダイアログを出す）
+            if (window.OneSignal) {
+                await window.OneSignal.Notifications.requestPermission();
+            }
+        }
+
+        function declineCustomPush() {
+            // 回答済みフラグを保存（二度と出さない）
+            localStorage.setItem('pushPromptAnswered', 'true');
+            document.getElementById('pushPromptModal').classList.add('hidden');
+        }
     </script>
 
     <script>
@@ -230,6 +252,19 @@
     <footer class="bg-gray-800 text-white py-8 text-center text-sm">
         <p class="opacity-60">&copy; KB PARK All Rights Reserved.</p>
     </footer>
+
+    <div id="pushPromptModal" class="fixed inset-0 z-[100] hidden flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity"></div>
+        <div class="relative w-full max-w-sm bg-white rounded-3xl p-6 shadow-2xl text-center animate-pop-in">
+            <div class="text-5xl mb-4">🔔</div>
+            <h3 class="text-xl font-bold mb-2 text-pop-green">通知の許可</h3>
+            <p class="text-gray-600 mb-6 text-sm leading-relaxed whitespace-pre-wrap">最新の予約状況やお得なクーポン情報を通知でお知らせします。通知を受け取りますか？</p>
+            <div class="flex gap-3">
+                <button onclick="declineCustomPush()" class="flex-1 py-3 rounded-xl font-bold bg-gray-200 text-gray-600 hover:bg-gray-300 transition">あとで</button>
+                <button onclick="acceptCustomPush()" class="flex-1 py-3 rounded-xl font-bold bg-pop-green text-white shadow-md hover:brightness-110 transition">許可する</button>
+            </div>
+        </div>
+    </div>
 
     <div id="loginModal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
         <div class="absolute inset-0 bg-pop-dim backdrop-blur-sm" onclick="closeModal('loginModal')"></div>
