@@ -834,7 +834,8 @@ function saveUserSession(user) {
     
     if (window.OneSignalDeferred) {
         window.OneSignalDeferred.push(async function(OneSignal) {
-            await OneSignal.login(user.member_id);
+            // ★修正箇所: IDが数値型になってサイレントエラーを起こすのを防ぐため、強制的に文字列化する
+            await OneSignal.login(String(user.member_id));
         });
     }
 }
@@ -848,7 +849,8 @@ function loadUserSession() {
         
         if (window.OneSignalDeferred) {
             window.OneSignalDeferred.push(async function(OneSignal) {
-                await OneSignal.login(STATE.user.member_id);
+                // ★修正箇所: 同上（文字列化）
+                await OneSignal.login(String(STATE.user.member_id));
             });
         }
     }

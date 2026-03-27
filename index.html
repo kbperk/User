@@ -25,10 +25,11 @@
             const isAppParam = new URLSearchParams(window.location.search).get('mode') === 'app';
             const isAppMode = isStandalone || isAppParam;
 
-            // 2. 初期化（scope指定の削除により、サブディレクトリでの権限エラーを解消）
+            // 2. 初期化（管理画面の設定と完全に一致させるためのパス指定を追加）
             await OneSignal.init({
                 appId: "fe175548-472e-490e-85ff-ea2bf485fc10",
-                serviceWorkerPath: "sw.js"
+                serviceWorkerPath: "/User/sw.js",
+                serviceWorkerParam: { scope: "/User/" }
             });
 
             // 3. アプリ版 ＆ まだ回答していない場合のみ、自作の日本語モーダルを表示
@@ -54,10 +55,34 @@
             // ★修正箇所：iPhoneのセキュリティブロックを貫通するため、非同期のクッションを外し一直線（同期処理）でOSダイアログを起動する
             if (window.OneSignal) {
                 await window.OneSignal.Notifications.requestPermission();
+                
+                // ★追加箇所: 許可操作が完了した直後の確実なタイミングでExternal IDを紐付ける（文字列へ変換）
+                const userData = localStorage.getItem('kb_user_v3');
+                if (userData) {
+                    try {
+                        const user = JSON.parse(userData);
+                        if (user && user.member_id) {
+                            await window.OneSignal.login(String(user.member_id));
+                        }
+                    } catch (e) {
+                        console.error('ID紐付けエラー:', e);
+                    }
+                }
             } else if (window.OneSignalDeferred) {
                 // 万一OneSignalの読み込みが遅れている場合のみフォールバック
                 window.OneSignalDeferred.push(async function(OneSignal) {
                     await OneSignal.Notifications.requestPermission();
+                    
+                    // フォールバック時も同様に紐付ける
+                    const userData = localStorage.getItem('kb_user_v3');
+                    if (userData) {
+                        try {
+                            const user = JSON.parse(userData);
+                            if (user && user.member_id) {
+                                await OneSignal.login(String(user.member_id));
+                            }
+                        } catch (e) {}
+                    }
                 });
             }
         }
