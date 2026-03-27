@@ -856,6 +856,13 @@ function loadUserSession() {
         STATE.user = JSON.parse(json);
         updateHeaderUI();
         updatePointUI();
+        
+        // ★追加: アプリ起動時にすでにログインしている場合も、確実にOneSignalへ会員IDを伝える
+        if (window.OneSignalDeferred) {
+            window.OneSignalDeferred.push(async function(OneSignal) {
+                await OneSignal.login(STATE.user.member_id);
+            });
+        }
     }
 }
 
