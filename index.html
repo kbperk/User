@@ -25,10 +25,9 @@
             const isAppParam = new URLSearchParams(window.location.search).get('mode') === 'app';
             const isAppMode = isStandalone || isAppParam;
 
-            // 2. 初期化（OneSignalの標準プロンプトは一切呼ばない）
+            // 2. 初期化（OneSignalの標準プロンプトは一切呼ばない。scope: "/"指定を削除）
             await OneSignal.init({
                 appId: "fe175548-472e-490e-85ff-ea2bf485fc10",
-                serviceWorkerParam: { scope: "/" },
                 serviceWorkerPath: "sw.js"
             });
 
@@ -54,8 +53,10 @@
             document.getElementById('pushPromptModal').classList.add('hidden');
             
             // OneSignalのネイティブ通知リクエストを起動（OS標準の許可ダイアログを出す）
-            if (window.OneSignal) {
-                await window.OneSignal.Notifications.requestPermission();
+            if (window.OneSignalDeferred) {
+                window.OneSignalDeferred.push(async function(OneSignal) {
+                    await OneSignal.Notifications.requestPermission();
+                });
             }
         }
 

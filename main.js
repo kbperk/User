@@ -8,16 +8,6 @@
 
 console.log('[KB] main.js loaded: Strict App Mode Separation Added');
 
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').then(reg => {
-      console.log('SW registered:', reg);
-    }).catch(err => {
-      console.log('SW registration failed:', err);
-    });
-  });
-}
-
 const API_URL = 'https://script.google.com/macros/s/AKfycbwkkj4vp6v9gfjLZIxsLN-1aaUjyQebngxfTuMDPz62x_xg4dCadey920wmL3IYtS82kA/exec';
 
 // 状態管理
@@ -842,7 +832,6 @@ function saveUserSession(user) {
     updateHeaderUI();
     updatePointUI();
     
-    // ★追加: OneSignalに会員IDを連携し、個別通知を可能にする
     if (window.OneSignalDeferred) {
         window.OneSignalDeferred.push(async function(OneSignal) {
             await OneSignal.login(user.member_id);
@@ -857,7 +846,6 @@ function loadUserSession() {
         updateHeaderUI();
         updatePointUI();
         
-        // ★追加: アプリ起動時にすでにログインしている場合も、確実にOneSignalへ会員IDを伝える
         if (window.OneSignalDeferred) {
             window.OneSignalDeferred.push(async function(OneSignal) {
                 await OneSignal.login(STATE.user.member_id);
@@ -866,7 +854,6 @@ function loadUserSession() {
     }
 }
 
-// ★ アプリ版のみポイントを表示する制御
 function updatePointUI() {
     const ptEl = document.getElementById('myPagePoint');
     const ptCard = document.getElementById('myPagePointCard');
@@ -954,7 +941,6 @@ document.getElementById('headerLogoutBtn').onclick = async () => {
         STATE.user = null;
         updateHeaderUI();
         
-        // ★追加: OneSignalからもログアウト
         if (window.OneSignalDeferred) {
             window.OneSignalDeferred.push(async function(OneSignal) {
                 await OneSignal.logout();
