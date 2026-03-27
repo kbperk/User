@@ -25,7 +25,7 @@
             const isAppParam = new URLSearchParams(window.location.search).get('mode') === 'app';
             const isAppMode = isStandalone || isAppParam;
 
-            // 2. 初期化（OneSignalの標準プロンプトは一切呼ばない。scope: "/"指定を削除）
+            // 2. 初期化（scope指定の削除により、サブディレクトリでの権限エラーを解消）
             await OneSignal.init({
                 appId: "fe175548-472e-490e-85ff-ea2bf485fc10",
                 serviceWorkerPath: "sw.js"
@@ -35,7 +35,6 @@
             if (isAppMode) {
                 const answered = localStorage.getItem('pushPromptAnswered');
                 if (!answered) {
-                    // 画面の描画完了を待ってからモーダルを表示
                     setTimeout(() => {
                         const modal = document.getElementById('pushPromptModal');
                         if (modal) modal.classList.remove('hidden');
