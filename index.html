@@ -51,8 +51,11 @@
             localStorage.setItem('pushPromptAnswered', 'true');
             document.getElementById('pushPromptModal').classList.add('hidden');
             
-            // OneSignalのネイティブ通知リクエストを起動（OS標準の許可ダイアログを出す）
-            if (window.OneSignalDeferred) {
+            // ★修正箇所：iPhoneのセキュリティブロックを貫通するため、非同期のクッションを外し一直線（同期処理）でOSダイアログを起動する
+            if (window.OneSignal) {
+                await window.OneSignal.Notifications.requestPermission();
+            } else if (window.OneSignalDeferred) {
+                // 万一OneSignalの読み込みが遅れている場合のみフォールバック
                 window.OneSignalDeferred.push(async function(OneSignal) {
                     await OneSignal.Notifications.requestPermission();
                 });
