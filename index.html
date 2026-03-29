@@ -20,19 +20,19 @@
         window.OneSignalDeferred = window.OneSignalDeferred || [];
         OneSignalDeferred.push(async function(OneSignal) {
             
-            // 1. 環境判定（アプリ版 PWA かどうか）
+            // 1. アプリ起動判定
             const isStandalone = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
             const isAppParam = new URLSearchParams(window.location.search).get('mode') === 'app';
             const isAppMode = isStandalone || isAppParam;
 
-            // 2. 初期化（管理画面の設定と完全に一致させるためのパス指定を追加）
+            // 2. パスを明示してOneSignalを初期化
             await OneSignal.init({
                 appId: "fe175548-472e-490e-85ff-ea2bf485fc10",
                 serviceWorkerPath: "/User/sw.js",
                 serviceWorkerParam: { scope: "/User/" }
             });
 
-            // 3. アプリ版 ＆ まだ回答していない場合のみ、自作の日本語モーダルを表示
+            // 3. アプリ版で未回答の場合のみモーダル表示
             if (isAppMode) {
                 const answered = localStorage.getItem('pushPromptAnswered');
                 if (!answered) {
@@ -44,19 +44,16 @@
             }
         });
 
-        // ==========================================
-        // ▼ カスタムモーダル用の制御関数 ▼
-        // ==========================================
+        // 通知を許可する処理
         async function acceptCustomPush() {
-            // 回答済みフラグを保存（二度と出さない）
             localStorage.setItem('pushPromptAnswered', 'true');
             document.getElementById('pushPromptModal').classList.add('hidden');
             
-            // ★修正箇所：iPhoneのセキュリティブロックを貫通するため、非同期のクッションを外し一直線（同期処理）でOSダイアログを起動する
+            // iOSの制限を回避するため同期処理で許可ダイアログを呼ぶ
             if (window.OneSignal) {
                 await window.OneSignal.Notifications.requestPermission();
                 
-                // ★追加箇所: 許可操作が完了した直後の確実なタイミングでExternal IDを紐付ける（文字列へ変換）
+                // 許可直後にユーザーIDを文字列として紐付ける
                 const userData = localStorage.getItem('kb_user_v3');
                 if (userData) {
                     try {
@@ -69,11 +66,9 @@
                     }
                 }
             } else if (window.OneSignalDeferred) {
-                // 万一OneSignalの読み込みが遅れている場合のみフォールバック
                 window.OneSignalDeferred.push(async function(OneSignal) {
                     await OneSignal.Notifications.requestPermission();
                     
-                    // フォールバック時も同様に紐付ける
                     const userData = localStorage.getItem('kb_user_v3');
                     if (userData) {
                         try {
@@ -81,14 +76,16 @@
                             if (user && user.member_id) {
                                 await OneSignal.login(String(user.member_id));
                             }
-                        } catch (e) {}
+                        } catch (e) {
+                            console.error('ID紐付けエラー:', e);
+                        }
                     }
                 });
             }
         }
 
+        // 通知を後でにする処理
         function declineCustomPush() {
-            // 回答済みフラグを保存（二度と出さない）
             localStorage.setItem('pushPromptAnswered', 'true');
             document.getElementById('pushPromptModal').classList.add('hidden');
         }
@@ -134,7 +131,7 @@
     </script>
     <link rel="stylesheet" href="style.css">
 <style>
-/* 済ハンコ（過去日表示用） */
+/* 済ハンコ */
 .kb-stamp-done{
   position:absolute;
   inset: 14%;
@@ -221,7 +218,7 @@
                     <p class="text-2xl font-black" id="dispMemberName">ゲスト 様</p>
                     <p class="text-sm font-mono mt-1 opacity-90">ID: <span id="dispMemberId" class="font-bold text-xl">---</span></p>
                 </div>
-                <button onclick="showQrModal()" class="bg-white text-pop-green font-bold py-2 px-4 rounded-xl shadow-md active:scale-95 transition text-sm flex flex-col items-center">
+                <button onclick="showQrModal('member')" class="bg-white text-pop-green font-bold py-2 px-4 rounded-xl shadow-md active:scale-95 transition text-sm flex flex-col items-center">
                     <span class="text-2xl leading-none">📱</span>
                     <span class="text-[10px]">会員証</span>
                 </button>
@@ -268,6 +265,13 @@
                 <div class="bg-white border-2 border-pop-green/30 rounded-xl p-4 text-center shadow-sm">
                     <p class="text-xs text-pop-green font-black mb-1">割引に使えるポイント</p>
                     <p class="text-3xl font-black text-pop-text font-english"><span id="myPagePoint">0</span><span class="text-sm ml-1 text-gray-500">pt</span></p>
+                </div>
+            </div>
+
+            <div id="myCouponsArea" class="mb-6">
+                <h4 class="font-bold text-pop-pink mb-2 flex items-center gap-2"><span>🎫</span> 保有クーポン</h4>
+                <div id="myCouponsList" class="grid gap-2">
+                    <div class="text-sm text-gray-500">現在使えるクーポンはありません。</div>
                 </div>
             </div>
 
@@ -522,12 +526,12 @@
         <div class="absolute inset-0 bg-pop-dim backdrop-blur-sm" onclick="closeModal('qrModal')"></div>
         <div class="relative w-full max-w-sm bg-white rounded-3xl p-8 shadow-2xl text-center animate-pop-in">
             <button onclick="closeModal('qrModal')" class="absolute top-4 right-4 text-2xl text-gray-400">×</button>
-            <h3 class="text-xl font-bold mb-4 text-pop-green">DIGITAL MEMBER CARD</h3>
+            <h3 id="qrModalTitle" class="text-xl font-bold mb-4 text-pop-green">DIGITAL MEMBER CARD</h3>
             <div id="qrCodeArea" class="bg-white border-4 border-gray-100 rounded-xl p-4 mb-4 aspect-square flex items-center justify-center">
                 <img src="" id="qrImage" alt="QR Code" class="w-full h-full object-contain">
             </div>
             <p class="text-3xl font-mono font-bold mb-2 tracking-widest text-pop-text" id="qrMemberId">---</p>
-            <p class="text-gray-400 text-xs">来店時にこの画面をスタッフに見せてください</p>
+            <p id="qrModalDesc" class="text-gray-400 text-xs">来店時にこの画面をスタッフに見せてください</p>
         </div>
     </div>
 

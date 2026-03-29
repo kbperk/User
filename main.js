@@ -4,6 +4,7 @@
  * - 3ファイル分割バックエンド対応
  * - PWAインストール対応 ＆ 2軸ポイント反映 ＆ SW登録
  * - ★ 新規: アプリとWebの完全分離ロジック搭載
+ * - ★ 新規: クーポン取得・利用および予約QR表示の完全実装
  */
 
 console.log('[KB] main.js loaded: Strict App Mode Separation Added');
@@ -18,7 +19,8 @@ const STATE = {
     currentMonth: new Date(), 
     selectedDate: null,
     selectedSlot: null,
-    selectedSlotWaitlist: false
+    selectedSlotWaitlist: false,
+    coupons: [] // ★追加：保有クーポンの保持用
 };
 
 // ==========================================
@@ -169,6 +171,24 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (headCountSelect) {
             headCountSelect.addEventListener('change', updateReserveAmountDisplay_);
         }
+        
+        // ★新規追加: URLパラメータからのクーポン受け取り・保留処理
+        const urlParams = new URLSearchParams(window.location.search);
+        const grantCouponAmt = urlParams.get('grant_coupon');
+        const grantCouponName = urlParams.get('coupon_name') || '特別クーポン';
+
+        if (grantCouponAmt) {
+            if (STATE.user) {
+                setTimeout(() => grantCouponProcess(grantCouponAmt, grantCouponName), 100);
+            } else {
+                sessionStorage.setItem('pending_coupon_amt', grantCouponAmt);
+                sessionStorage.setItem('pending_coupon_name', grantCouponName);
+                setTimeout(() => showMessageModal('info', 'クーポンの受け取りにはログイン（または新規登録）が必要です。', 'お知らせ'), 800);
+                
+                const newUrl = window.location.pathname + '?mode=app';
+                window.history.replaceState(null, '', newUrl);
+            }
+        }
 
         document.getElementById('pwaInstallBanner')?.addEventListener('click', async () => {
             if (pwaPrompt) {
@@ -240,7 +260,7 @@ async function callApi(action, params = {}) {
         const device_id = getDeviceId_();
         const payload = { action, ...params };
 
-        if (['get_slots','reserve','cancel','my_reservations'].includes(action)) {
+        if (['get_slots','reserve','cancel','my_reservations','grant_coupon'].includes(action)) {
             payload.device_id = device_id;
         }
 
@@ -259,6 +279,37 @@ async function callApi(action, params = {}) {
     }
 }
 
+// ★追加: ログイン・登録後に保留中クーポンをチェックする
+async function checkPendingCoupon() {
+    const amt = sessionStorage.getItem('pending_coupon_amt');
+    const name = sessionStorage.getItem('pending_coupon_name');
+    if (amt && STATE.user) {
+        sessionStorage.removeItem('pending_coupon_amt');
+        sessionStorage.removeItem('pending_coupon_name');
+        await grantCouponProcess(amt, name);
+    }
+}
+
+// ★追加: クーポン付与の実行
+async function grantCouponProcess(amt, name) {
+    try {
+        await callApi('grant_coupon', {
+            member_id: STATE.user.member_id,
+            amount: Number(amt),
+            name: name
+        });
+        const newUrl = window.location.pathname + '?mode=app';
+        window.history.replaceState(null, '', newUrl);
+        sessionStorage.setItem('kb_flash_after_reload', JSON.stringify({
+            type: 'info', text: `🎁 ${name}（${amt}円引）を獲得しました！\nマイページからご利用いただけます。`
+        }));
+        window.location.reload();
+    } catch (e) {
+        showMessageModal('error', e.message || 'クーポンの取得に失敗しました。');
+    }
+}
+
+
 async function loadMyReservations() {
     if (!STATE.user) return;
     try {
@@ -271,11 +322,54 @@ async function loadMyReservations() {
             localStorage.setItem('kb_user_v3', JSON.stringify(STATE.user));
         }
 
+        renderMyCoupons(res.coupons || []);
         renderMyReservations(res.reservations || []);
     } catch (e) {
         console.error(e);
+        renderMyCoupons([]);
         renderMyReservations([]);
     }
+}
+
+// ★新規追加: 保有クーポンのレンダリング処理
+function renderMyCoupons(coupons) {
+    const wrap = document.getElementById('myCouponsList');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    
+    if (!coupons || coupons.length === 0) {
+        wrap.innerHTML = '<div class="text-sm text-gray-500">現在使えるクーポンはありません。</div>';
+        STATE.coupons = [];
+        return;
+    }
+
+    coupons.forEach((cpn, idx) => {
+        const div = document.createElement('div');
+        div.className = 'bg-white border-2 border-pop-pink/30 rounded-xl p-3 flex justify-between items-center shadow-sm';
+        div.innerHTML = `
+            <div>
+                <p class="text-xs font-bold text-gray-500">${cpn.name}</p>
+                <p class="text-xl font-black text-pop-pink">${cpn.amount}<span class="text-sm ml-1">円引</span></p>
+            </div>
+            <button onclick="useCoupon(${idx})" class="bg-pop-pink text-white font-bold py-2 px-4 rounded-lg shadow hover:scale-95 transition">使う</button>
+        `;
+        wrap.appendChild(div);
+    });
+    STATE.coupons = coupons;
+}
+
+window.useCoupon = async function(idx) {
+    const cpn = STATE.coupons[idx];
+    if (!cpn) return;
+    const ok = await showConfirm('クーポンの利用', `「${cpn.name}（${cpn.amount}円引）」を使用しますか？\n※受付にてスタッフの目の前でQRコードをご提示ください。`);
+    if (ok) {
+        showQrModal('coupon', cpn);
+    }
+};
+
+// ★新規追加: 安全に予約QRを表示するためのグローバル関数
+window.showReserveQr = function(resId) {
+    showQrModal('reserve', resId);
 }
 
 function renderMyReservations(items) {
@@ -303,8 +397,12 @@ function renderMyReservations(items) {
         const div = document.createElement('div');
         div.className = 'border-2 border-gray-200 rounded-2xl p-4 bg-white';
         const cancelBtn = it.cancelable
-            ? `<button class="mt-3 w-full bg-red-600 text-white font-bold py-3 rounded-xl shadow hover:brightness-110 transition" data-resid="${it.reservation_id}" data-wait="${it.is_waitlist ? 1 : 0}">キャンセルする</button>`
-            : `<div class="mt-3 text-sm text-gray-500">※キャンセル締切（前日）を過ぎています。当日キャンセルは全額負担となります。</div>`;
+            ? `<button class="mt-2 w-full bg-red-600 text-white font-bold py-2 rounded-xl shadow hover:brightness-110 transition" data-resid="${it.reservation_id}" data-wait="${it.is_waitlist ? 1 : 0}">キャンセルする</button>`
+            : `<div class="mt-2 text-sm text-gray-500">※キャンセル締切（前日）を過ぎています。当日キャンセルは全額負担となります。</div>`;
+            
+        // ★修正箇所: 予約QRボタンを安全に復旧
+        const qrBtn = `<button class="mt-3 w-full bg-pop-green text-white font-bold py-3 rounded-xl shadow hover:brightness-110 transition flex justify-center items-center gap-2" onclick="showReserveQr('${it.reservation_id}')"><span>📱</span> 予約QRコードを表示</button>`;
+
         div.innerHTML = `
             <div class="flex items-baseline justify-between">
                 <div class="text-lg font-black text-pop-green">${it.date} ${it.time}</div>
@@ -312,6 +410,7 @@ function renderMyReservations(items) {
                 <div class="text-lg font-black">${it.head_count}名</div>
             </div>
             <div class="mt-1 text-sm text-gray-600">料金: <span class="font-bold text-blue-600">${Number(it.amount||0).toLocaleString('ja-JP')}円（税込）</span></div>
+            ${qrBtn}
             ${cancelBtn}
         `;
         wrap.appendChild(div);
@@ -671,6 +770,7 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
         closeModal('loginModal');
         showMessageModal('info', `おかえりなさい、${user.name} さん！`, 'ログイン成功');
         form.reset();
+        await checkPendingCoupon();
     } catch (err) {
         showMessageModal('error', err.message, 'ログイン失敗');
     } finally {
@@ -812,7 +912,8 @@ document.getElementById('registerForm').addEventListener('submit', async (e) => 
 
         closeModal('registerModal');
         showMessageModal('info', `ようこそ！\nあなたの会員IDは【 ${res.member_id} 】です。\n忘れないようにメモしてください。`, '登録完了！');
-        showQrModal();
+        showQrModal('member');
+        await checkPendingCoupon();
     } catch (err) {
         showMessageModal('error', err.message, '登録エラー');
     } finally {
@@ -822,7 +923,7 @@ document.getElementById('registerForm').addEventListener('submit', async (e) => 
 });
 
 // ==========================================
-// 4. セッション & UI管理 & QR表示
+// 4. セッション & UI管理
 // ==========================================
 
 function saveUserSession(user) {
@@ -834,7 +935,6 @@ function saveUserSession(user) {
     
     if (window.OneSignalDeferred) {
         window.OneSignalDeferred.push(async function(OneSignal) {
-            // ★修正箇所: IDが数値型になってサイレントエラーを起こすのを防ぐため、強制的に文字列化する
             await OneSignal.login(String(user.member_id));
         });
     }
@@ -849,7 +949,6 @@ function loadUserSession() {
         
         if (window.OneSignalDeferred) {
             window.OneSignalDeferred.push(async function(OneSignal) {
-                // ★修正箇所: 同上（文字列化）
                 await OneSignal.login(String(STATE.user.member_id));
             });
         }
@@ -900,9 +999,30 @@ function updateHeaderUI() {
     }
 }
 
-window.showQrModal = function() {
+// ★修正: 種別に応じたQRコードの汎用表示
+window.showQrModal = function(type = 'member', data = null) {
     if (!STATE.user) return;
-    const safeId = encodeURIComponent(STATE.user.member_id);
+    
+    let qrText = '';
+    let titleText = 'DIGITAL MEMBER CARD';
+    let descText = '来店時にこの画面をスタッフに見せてください';
+    let displayId = STATE.user.member_id;
+
+    if (type === 'member') {
+        qrText = STATE.user.member_id;
+    } else if (type === 'reserve') {
+        qrText = `RES:${data}:${STATE.user.member_id}`;
+        titleText = 'RESERVATION TICKET';
+        descText = '受付でご予約のQRコードを提示してください';
+        displayId = '予約ID: ' + data;
+    } else if (type === 'coupon') {
+        qrText = `CPN:${data.amount}:${STATE.user.member_id}:${data.name}`;
+        titleText = 'SPECIAL COUPON';
+        descText = '【スタッフ読取用】お会計時にご提示ください';
+        displayId = `🎁 ${data.amount}円引き`;
+    }
+
+    const safeId = encodeURIComponent(qrText);
     const qrUrl = `https://quickchart.io/qr?size=200&text=${safeId}`;
     
     let imgEl = document.getElementById('qrImage');
@@ -911,13 +1031,22 @@ window.showQrModal = function() {
         if (modal) imgEl = modal.querySelector('img');
     }
     
+    const titleEl = document.getElementById('qrModalTitle');
+    const descEl = document.getElementById('qrModalDesc');
+    const idEl = document.getElementById('qrMemberId');
+
     if (imgEl) {
         imgEl.src = qrUrl;
-        console.log('QR Code generated:', qrUrl);
     }
-    
-    const idEl = document.getElementById('qrMemberId');
-    if (idEl) idEl.textContent = STATE.user.member_id;
+    if (titleEl) {
+        titleEl.textContent = titleText;
+        titleEl.className = type === 'coupon' ? 'text-xl font-bold mb-4 text-pop-pink' : 'text-xl font-bold mb-4 text-pop-green';
+    }
+    if (descEl) descEl.textContent = descText;
+    if (idEl) {
+        idEl.textContent = displayId;
+        idEl.className = type === 'coupon' ? 'text-2xl font-black mb-2 text-pop-pink' : 'text-3xl font-mono font-bold mb-2 tracking-widest text-pop-text';
+    }
     
     if (typeof openModal === 'function') openModal('qrModal');
 };
@@ -933,6 +1062,19 @@ function updateQrImage() {
     }
     if(imgEl) {
         imgEl.src = qrUrl;
+    }
+    
+    const titleEl = document.getElementById('qrModalTitle');
+    const descEl = document.getElementById('qrModalDesc');
+    const idEl = document.getElementById('qrMemberId');
+    if (titleEl) {
+        titleEl.textContent = 'DIGITAL MEMBER CARD';
+        titleEl.className = 'text-xl font-bold mb-4 text-pop-green';
+    }
+    if (descEl) descEl.textContent = '来店時にこの画面をスタッフに見せてください';
+    if (idEl) {
+        idEl.textContent = STATE.user.member_id;
+        idEl.className = 'text-3xl font-mono font-bold mb-2 tracking-widest text-pop-text';
     }
 }
 
