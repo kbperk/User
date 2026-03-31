@@ -3,13 +3,94 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>KB PARK 予約システム</title>
+    <title>KB park (ケービーパーク) | 広島県福山市の本格トランポリンパーク</title>
+    
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#32D74B">
+    <link rel="apple-touch-icon" href="icon-192.png">
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700;900&family=Fredoka:wght@600&family=Zen+Maru+Gothic:wght@500;700&display=swap" rel="stylesheet">
     
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+    <script>
+        window.OneSignalDeferred = window.OneSignalDeferred || [];
+        OneSignalDeferred.push(async function(OneSignal) {
+            
+            // 1. アプリ起動判定
+            const isStandalone = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+            const isAppParam = new URLSearchParams(window.location.search).get('mode') === 'app';
+            const isAppMode = isStandalone || isAppParam;
+
+            // 2. パスを明示してOneSignalを初期化
+            await OneSignal.init({
+                appId: "fe175548-472e-490e-85ff-ea2bf485fc10",
+                serviceWorkerPath: "/User/sw.js",
+                serviceWorkerParam: { scope: "/User/" }
+            });
+
+            // 3. アプリ版で未回答の場合のみモーダル表示
+            if (isAppMode) {
+                const answered = localStorage.getItem('pushPromptAnswered');
+                if (!answered) {
+                    setTimeout(() => {
+                        const modal = document.getElementById('pushPromptModal');
+                        if (modal) modal.classList.remove('hidden');
+                    }, 1000);
+                }
+            }
+        });
+
+        // 通知を許可する処理
+        async function acceptCustomPush() {
+            localStorage.setItem('pushPromptAnswered', 'true');
+            document.getElementById('pushPromptModal').classList.add('hidden');
+            
+            // iOSの制限を回避するため同期処理で許可ダイアログを呼ぶ
+            if (window.OneSignal) {
+                await window.OneSignal.Notifications.requestPermission();
+                
+                // 許可直後にユーザーIDを文字列として紐付ける
+                const userData = localStorage.getItem('kb_user_v3');
+                if (userData) {
+                    try {
+                        const user = JSON.parse(userData);
+                        if (user && user.member_id) {
+                            await window.OneSignal.login(String(user.member_id));
+                        }
+                    } catch (e) {
+                        console.error('ID紐付けエラー:', e);
+                    }
+                }
+            } else if (window.OneSignalDeferred) {
+                window.OneSignalDeferred.push(async function(OneSignal) {
+                    await OneSignal.Notifications.requestPermission();
+                    
+                    const userData = localStorage.getItem('kb_user_v3');
+                    if (userData) {
+                        try {
+                            const user = JSON.parse(userData);
+                            if (user && user.member_id) {
+                                await OneSignal.login(String(user.member_id));
+                            }
+                        } catch (e) {
+                            console.error('ID紐付けエラー:', e);
+                        }
+                    }
+                });
+            }
+        }
+
+        // 通知を後でにする処理
+        function declineCustomPush() {
+            localStorage.setItem('pushPromptAnswered', 'true');
+            document.getElementById('pushPromptModal').classList.add('hidden');
+        }
+    </script>
+
     <script>
         tailwind.config = {
             theme: {
@@ -50,7 +131,7 @@
     </script>
     <link rel="stylesheet" href="style.css">
 <style>
-/* 済ハンコ（過去日表示用） */
+/* 済ハンコ */
 .kb-stamp-done{
   position:absolute;
   inset: 14%;
@@ -93,7 +174,7 @@
                 <img src="kb君万歳.png" alt="KB君" class="w-10 h-10 object-contain" /> KB PARK 予約システム
             </h1>
             <div class="flex items-center gap-2">
-                <a href="https://kbperk.github.io/main/" class="text-[10px] md:text-xs bg-pop-yellow text-black px-3 py-2 rounded-full font-bold shadow-sm hover:brightness-110 transition whitespace-nowrap">TOPへ戻る</a>
+                <a id="headerTopBtn" href="https://kbperk.github.io/main/" class="text-[10px] md:text-xs bg-pop-yellow text-black px-3 py-2 rounded-full font-bold shadow-sm hover:brightness-110 transition whitespace-nowrap">TOPへ戻る</a>
                 
                 <div id="headerUserArea" class="hidden flex items-center gap-3">
                     <span id="headerUserName" class="font-bold text-sm text-pop-green hidden md:inline">ゲスト様</span>
@@ -104,6 +185,16 @@
     </header>
 
     <main class="relative z-10 pt-24 pb-20 container mx-auto px-4 max-w-3xl">
+
+        <div id="pwaInstallBanner" class="hidden bg-gradient-to-r from-pop-green to-pop-cyan text-white p-4 rounded-2xl shadow-lg mb-6 flex items-center justify-between cursor-pointer active:scale-95 transition-transform">
+            <div>
+                <h3 class="font-black text-lg">📱 公式アプリを入れる</h3>
+                <p class="text-xs font-bold opacity-90 mt-1">ワンタップで予約！ポイントも貯まる！</p>
+            </div>
+            <div class="bg-white text-pop-green font-black text-sm px-4 py-2 rounded-xl shadow-sm whitespace-nowrap">
+                追加
+            </div>
+        </div>
 
         <section id="authSection" class="bg-white rounded-3xl shadow-xl border-4 border-pop-green/30 p-8 text-center mb-12 transform transition-all hover:scale-[1.01]">
             <div class="mb-6"><span class="text-6xl">🔐</span></div>
@@ -127,7 +218,7 @@
                     <p class="text-2xl font-black" id="dispMemberName">ゲスト 様</p>
                     <p class="text-sm font-mono mt-1 opacity-90">ID: <span id="dispMemberId" class="font-bold text-xl">---</span></p>
                 </div>
-                <button onclick="showQrModal()" class="bg-white text-pop-green font-bold py-2 px-4 rounded-xl shadow-md active:scale-95 transition text-sm flex flex-col items-center">
+                <button onclick="showQrModal('member')" class="bg-white text-pop-green font-bold py-2 px-4 rounded-xl shadow-md active:scale-95 transition text-sm flex flex-col items-center">
                     <span class="text-2xl leading-none">📱</span>
                     <span class="text-[10px]">会員証</span>
                 </button>
@@ -167,8 +258,23 @@
 
         <section id="myReservationsSection" class="hidden bg-white rounded-3xl shadow-xl border-4 border-pop-green/20 p-6 mb-12">
             <div class="flex items-center justify-between mb-4">
-                <h3 class="text-xl font-bold flex items-center gap-2"><span>📌</span> マイ予約</h3>
+                <h3 class="text-xl font-bold flex items-center gap-2"><span>📌</span> マイページ</h3>
             </div>
+
+            <div id="myPagePointCard" class="hidden bg-gray-50 rounded-2xl p-4 mb-6 border-2 border-gray-100">
+                <div class="bg-white border-2 border-pop-green/30 rounded-xl p-4 text-center shadow-sm">
+                    <p class="text-xs text-pop-green font-black mb-1">割引に使えるポイント</p>
+                    <p class="text-3xl font-black text-pop-text font-english"><span id="myPagePoint">0</span><span class="text-sm ml-1 text-gray-500">pt</span></p>
+                </div>
+            </div>
+
+            <div id="myCouponsArea" class="mb-6">
+                <h4 class="font-bold text-pop-pink mb-2 flex items-center gap-2"><span>🎫</span> 保有クーポン</h4>
+                <div id="myCouponsList" class="grid gap-2">
+                    <div class="text-sm text-gray-500">現在使えるクーポンはありません。</div>
+                </div>
+            </div>
+
             <div id="myReservationsEmpty" class="text-sm text-gray-500 hidden">予約はありません。</div>
             <div id="myReservations" class="grid gap-3"></div>
         </section>
@@ -178,6 +284,19 @@
     <footer class="bg-gray-800 text-white py-8 text-center text-sm">
         <p class="opacity-60">&copy; KB PARK All Rights Reserved.</p>
     </footer>
+
+    <div id="pushPromptModal" class="fixed inset-0 z-[100] hidden flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity"></div>
+        <div class="relative w-full max-w-sm bg-white rounded-3xl p-6 shadow-2xl text-center animate-pop-in">
+            <div class="text-5xl mb-4">🔔</div>
+            <h3 class="text-xl font-bold mb-2 text-pop-green">通知の許可</h3>
+            <p class="text-gray-600 mb-6 text-sm leading-relaxed whitespace-pre-wrap">最新の予約状況やお得なクーポン情報を通知でお知らせします。通知を受け取りますか？</p>
+            <div class="flex gap-3">
+                <button onclick="declineCustomPush()" class="flex-1 py-3 rounded-xl font-bold bg-gray-200 text-gray-600 hover:bg-gray-300 transition">あとで</button>
+                <button onclick="acceptCustomPush()" class="flex-1 py-3 rounded-xl font-bold bg-pop-green text-white shadow-md hover:brightness-110 transition">許可する</button>
+            </div>
+        </div>
+    </div>
 
     <div id="loginModal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
         <div class="absolute inset-0 bg-pop-dim backdrop-blur-sm" onclick="closeModal('loginModal')"></div>
@@ -199,7 +318,7 @@
                     <button type="button" onclick="closeModal('loginModal'); openModal('forgotIdModal');" class="text-sm font-bold text-pop-cyan underline hover:text-pop-pink transition">会員IDを忘れた方はこちら</button>
                 </div>
 
-                <div class="mt-6 text-center border-t-2 border-gray-100 pt-4">
+                <div id="loginModalTopContainer" class="mt-6 text-center border-t-2 border-gray-100 pt-4">
                     <a href="https://kbperk.github.io/main/" class="text-sm font-bold text-gray-400 hover:text-gray-600 transition">◀ TOPへ戻る</a>
                 </div>
             </form>
@@ -407,12 +526,12 @@
         <div class="absolute inset-0 bg-pop-dim backdrop-blur-sm" onclick="closeModal('qrModal')"></div>
         <div class="relative w-full max-w-sm bg-white rounded-3xl p-8 shadow-2xl text-center animate-pop-in">
             <button onclick="closeModal('qrModal')" class="absolute top-4 right-4 text-2xl text-gray-400">×</button>
-            <h3 class="text-xl font-bold mb-4 text-pop-green">DIGITAL MEMBER CARD</h3>
+            <h3 id="qrModalTitle" class="text-xl font-bold mb-4 text-pop-green">DIGITAL MEMBER CARD</h3>
             <div id="qrCodeArea" class="bg-white border-4 border-gray-100 rounded-xl p-4 mb-4 aspect-square flex items-center justify-center">
                 <img src="" id="qrImage" alt="QR Code" class="w-full h-full object-contain">
             </div>
             <p class="text-3xl font-mono font-bold mb-2 tracking-widest text-pop-text" id="qrMemberId">---</p>
-            <p class="text-gray-400 text-xs">来店時にこの画面をスタッフに見せてください</p>
+            <p id="qrModalDesc" class="text-gray-400 text-xs">来店時にこの画面をスタッフに見せてください</p>
         </div>
     </div>
 
