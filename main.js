@@ -1148,7 +1148,30 @@ document.getElementById('reserveForm').addEventListener('submit', async (e) => {
         window.location.reload();
     } catch (e) {
         showLoader(false);
-        showMessageModal('error', e.message || String(e));
+
+        // ★修正(2026-08-22): 「失敗」と断定しないようにした。
+        //   GASは正常に予約を書き込んでいるのに、Googleのリダイレクト先で
+        //   レスポンスが読めず例外になるケースがあり、その場合に「失敗」と出すと
+        //   お客様が二重予約するか、予約済みなのに諦めて離脱してしまうため。
+        //   ・GASが返した明確な理由（満員・重複など）→ そのまま表示（＝確実に失敗）
+        //   ・通信そのものが読めなかった場合          → 確認をお願いする案内に切替
+        const rawMsg = (e && e.message) ? String(e.message) : String(e);
+        const isServerReason = /予約|満員|会員|ログイン|早すぎ|集中|枠|定員|キャンセル/.test(rawMsg);
+
+        if (isServerReason) {
+            showMessageModal('error', rawMsg);
+        } else {
+            showMessageModal(
+                'warn',
+                '通信が不安定なため、予約の結果を確認できませんでした。\n\n' +
+                '⚠️ ご予約は完了している可能性があります。\n' +
+                '「マイページ」を開いて、予約が入っているかご確認ください。\n\n' +
+                '・予約が入っていた場合 → そのままで大丈夫です\n' +
+                '・入っていない場合 → もう一度お試しください\n\n' +
+                'ご不明な場合はお店までご連絡ください。',
+                'ご確認ください'
+            );
+        }
     } finally {
         btn.disabled = false;
         btn.textContent = '予約へ進む';
