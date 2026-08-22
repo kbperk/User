@@ -256,6 +256,18 @@ async function initAppData() {
 
 async function callApi(action, params = {}) {
     showLoader(true);
+
+    // ★修正(2026-08-22): 通信タイムアウトを追加。
+    //   従来はタイムアウトが無く、通信が固まると「予約しています...」の表示のまま
+    //   ブラウザを閉じるまで永久に復帰できなかった。
+    //   GASの実測所要時間は最長でも約7秒のため、30秒あれば十分すぎる余裕がある。
+    //   AbortController に対応していない古いブラウザでは、従来どおりの動作になる。
+    const TIMEOUT_MS = 30000;
+    const controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    const timer = controller
+        ? setTimeout(function(){ try { controller.abort(); } catch(_){} }, TIMEOUT_MS)
+        : null;
+
     try{
         const device_id = getDeviceId_();
         const payload = { action, ...params };
@@ -265,16 +277,29 @@ async function callApi(action, params = {}) {
         }
 
         const body = JSON.stringify(payload);
-        const response = await fetch(API_URL, {
+
+        const fetchOptions = {
             method: 'POST',
             mode: 'cors',
             headers: { 'Content-Type': 'text/plain' },
             body: body
-        });
+        };
+        if (controller) fetchOptions.signal = controller.signal;
+
+        const response = await fetch(API_URL, fetchOptions);
         const json = await response.json();
         if (!json.ok) throw new Error(json.error || 'API Error');
         return json.data;
+    } catch (e) {
+        // タイムアウトで打ち切った場合だけ、分かりやすい日本語に置き換える。
+        // それ以外のエラー（満員・重複など、GASが返した理由）はそのまま通す。
+        const nm = (e && e.name) ? String(e.name) : '';
+        if (nm === 'AbortError' || String(e).indexOf('aborted') >= 0) {
+            throw new Error('通信がタイムアウトしました。電波の良い場所で、もう一度お試しください。');
+        }
+        throw e;
     } finally {
+        if (timer) clearTimeout(timer);
         showLoader(false);
     }
 }
